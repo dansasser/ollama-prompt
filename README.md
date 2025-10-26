@@ -79,6 +79,56 @@ ollama-prompt --prompt "Evaluate performance of sorting algorithms." --model dee
 ```
 
 **Advanced:**
+
+### Inlining local files in prompts (new: @file refs)
+
+You can reference local files directly inside a prompt using an `@` token. The CLI supports both Unix-style and Windows-style paths (forward and backslashes). When the CLI sees an `@path` token (for example `@./README.md` or `@docs\design.md`), it will read that file from disk (relative to `--repo-root`), inline its contents (bounded by `--max-file-bytes`), and send the combined prompt to the Ollama model. This lets remote orchestrators send only a short instruction like `analyze @./this-file.md` instead of embedding the full file content themselves.
+
+Syntax and rules
+- Token: `@<path>` where `<path>` must be path-like:
+  - starts with `./`, `../`, `/`, `\` or
+  - contains a path separator (`/` or `\`).
+  This reduces accidental expansion of email-like tokens (e.g. `@user`).
+- Examples of valid tokens:
+  - Unix: `@./README.md`, `@src/module/file.py`, `@/home/dev/project/notes.md`
+  - Windows: `@.\README.md`, `@src\module\file.py`, `@\C:\project\notes.md`
+- Files are read from disk by the CLI process before calling the local Ollama server.
+- Each referenced file is read up to `--max-file-bytes` bytes (default: 200000) and will be marked as `[TRUNCATED]` if larger.
+- Paths are resolved relative to `--repo-root` (default: `.`). Absolute paths are allowed only if they reside inside `--repo-root`.
+
+Examples
+- Summarize a README (Unix):
+```bash
+ollama-prompt --prompt "@./README.md Summarize the contents of this README" --model deepseek-v3.1:671b-cloud
+```
+
+- Summarize a README (Windows PowerShell):
+```powershell
+ollama-prompt --prompt "@.\README.md Summarize the contents of this README" --model deepseek-v3.1:671b-cloud
+```
+
+- Ask for fixes for a file (repo located at C:\projects\app):
+```bash
+ollama-prompt --prompt "Find bugs in @src\app\main.py" \
+  --repo-root C:\projects\app \
+  --model deepseek-v3.1:671b-cloud
+```
+
+Flags to document
+- `--repo-root`: Directory used to resolve `@file` references and to constrain file reads. Default is current working directory.
+- `--max-file-bytes`: Maximum number of bytes to read and inline for each referenced file. Large files will be truncated and the model will see a `[TRUNCATED]` marker.
+- Existing flags still apply: `--model`, `--temperature`, `--max_tokens`.
+
+Security and operational notes
+- Do not expose machines running this CLI (or its HTTP wrapper) to untrusted networks without authentication; the CLI will read local files and inline them into prompts.
+- Use a restrictive `--repo-root` to avoid allowing arbitrary filesystem reads.
+- Keep per-file limits (`--max-file-bytes`) conservative for very large repos.
+- For reproducibility, include file metadata (commit hash or path/mtime) in prompts or outputs when necessary.
+- For large repos prefer a retrieval/indexing layer (embeddings + vector DB) rather than inlining many big files in one prompt.
+
+Placement suggestion
+- Insert this subsection under the README’s Usage section (right after the "Custom Flags" examples) so users see the new behavior alongside the other flags and examples.
+
 - Pipe results with `jq`:
   ```bash
   ollama-prompt --prompt "Critical design flaws in utils.py?" | jq .eval_count
