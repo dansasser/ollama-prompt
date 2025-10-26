@@ -1,2 +1,0 @@
-[console_scripts]
-ollama-prompt = ollama_prompt.cli:main
