@@ -1,0 +1,17 @@
+[project]
+name = "ollama-prompt"
+version = "1.0.0"
+description = "Ollama CLI prompt tool for local LLM code analysis"
+authors = [
+    {name = "Daniel T Sasser II"}
+]
+readme = "README.md"
+requires-python = ">=3.7"
+dependencies = ["ollama"]
+
+[project.scripts]
+ollama-prompt = "ollama_prompt.cli:main"
+
+[build-system]
+requires = ["setuptools>=65.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
