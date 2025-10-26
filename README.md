@@ -1,132 +1,125 @@
-# `ollama-prompt.py` – Local Ollama CLI Tool for Deep Analysis
+# ollama-prompt
 
-## **Overview**
-`ollama-prompt` is a cross-platform Python command-line utility to interact with a local Ollama server for advanced code analysis, prompt evaluation, and cost tracking. It sends a user-defined prompt to a chosen Ollama model, offloads analysis, and returns a complete JSON response with all server-side metadata: prompt, output, token counts, durations, and more.
+**Local Ollama CLI Tool for Deep Analysis**
 
-This tool is ideal for:
+## Overview
+
+**ollama-prompt** is a cross-platform Python command-line utility to interact with a local Ollama server for advanced code analysis, prompt evaluation, and cost tracking. Send custom prompts to your preferred Ollama model and receive a structured JSON response with all server-side metadata: prompt, output, token counts, durations, and much more.
+
+**Ideal for:**
 - AGI agent orchestration
 - Cost-aware code review workflows
 - Analytics on token usage
 - Integrating structured LLM output into your developer pipeline
 
-***
+## Features
 
-## **Features**
-- Flexible CLI flags: set prompt, model, temperature, and token count.
-- Prints **full verbose JSON**: includes response text, token usage (`prompt_eval_count`, `eval_count`), and engine stats.
-- Matches PowerShell API workflows and allows easy parsing for downstream analysis, reporting, or archiving.
-- Works on Windows, Mac, Linux with Python 3.7+ and [Ollama](https://ollama.com/) installed.
-
-***
-
-## **Installation**
-
-1. **Install Python ≥ 3.7**  
-   Windows: [Python Downloads](https://www.python.org/downloads/)
-   Mac/Linux: Preinstalled or use your package manager.
-
-2. **Install Ollama Python client**
-   ```bash
-   pip install ollama
-   ```
-
-3. **Ensure the Ollama server is running locally**
-   ```bash
-   ollama serve
-   ```
-
-4. **Download/copy the script**
-   Save the following code as `ollama-prompt.py`:
-
-```python
-import ollama
-import argparse
-import json
-
-def main():
-    parser = argparse.ArgumentParser(description="Send a prompt to local Ollama and get full verbose JSON response (tokens, durations, output).")
-    parser.add_argument('--prompt', required=True, help="Prompt to send to the model")
-    parser.add_argument('--model', default="deepseek-v3.1:671b-cloud", help="Model name")
-    parser.add_argument('--temperature', type=float, default=0.1, help="Sampling temperature")
-    parser.add_argument('--max_tokens', type=int, default=2048, help="Maximum tokens for response")
-    args = parser.parse_args()
-    result = ollama.generate(
-        model=args.model,
-        prompt=args.prompt,
-        options={
-            "temperature": args.temperature,
-            "num_predict": args.max_tokens
-        },
-        stream=False
-    )
-    result_dict = result.model_dump() if hasattr(result, "model_dump") else dict(result)
-    print(json.dumps(result_dict, indent=2))
-
-if __name__ == "__main__":
-    main()
-```
+- Flexible CLI flags: set prompt, model, temperature, and token count
+- Prints **full verbose JSON**: includes response text, token usage (`prompt_eval_count`, `eval_count`), and engine stats
+- Integrates easily into developer pipelines (PowerShell, Bash, agent loops)
+- Works on Windows, Mac, Linux (Python 3.7+) with Ollama installed
 
 ***
 
-## **Usage**
+## Installation
 
-### **Basic Analysis**
+**Recommended (PyPI):**
+
 ```bash
-python3 ollama-prompt.py --prompt "Summarize the architecture in src/modules." --model deepseek-v3.1:671b-cloud
+pip install ollama-prompt
 ```
 
-### **Custom Temperature & Tokens**
-```bash
-python3 ollama-prompt.py --prompt "Evaluate performance of the sorting algorithms." --temperature 0.05 --max_tokens 4096
-```
+**Requirements:**
+- Python 3.7 or higher
+- Local Ollama server running (`ollama serve`)
 
-### **Full JSON Output for Agent/Log Use**
+**Alternative: Development/Manual Install**
+
+Clone the repository and install in editable mode:
+
 ```bash
-python3 ollama-prompt.py --prompt "Critical design flaws in utils.py?" > analysis.json
+git clone https://github.com/dansasser/ollama-prompt.git
+cd ollama-prompt
+pip install -e .
 ```
 
 ***
 
-## **Output**
-Returns a **single JSON object**. Example fields:
-- `model`: Model name used
-- `prompt_eval_count`: Tokens in your prompt
-- `eval_count`: Tokens generated/used in completion
-- `response`: The full answer text from Ollama
-- `total_duration`: Full query latency (ns)
-- `prompt_eval_duration`: Prompt token eval time
-- `eval_duration`: Output token eval time
-- `done`: Completion status
+## Usage
 
-***
+**Quick Start:**
 
-## **Advanced Tips**
-- Pipe results to jq or similar for further processing:
+You must have the Ollama server running locally:
+```bash
+ollama serve
+```
+
+**Basic Example:**
+```bash
+ollama-prompt --prompt "Summarize the architecture in src/modules." --model deepseek-v3.1:671b-cloud
+```
+
+**Custom Flags:**
+```bash
+ollama-prompt --prompt "Evaluate performance of sorting algorithms." --model deepseek-v3.1:671b-cloud --temperature 0.05 --max_tokens 4096
+```
+
+**Output Example (JSON):**
+```json
+{
+  "model": "deepseek-v3.1:671b-cloud",
+  "prompt_eval_count": 38,
+  "eval_count": 93,
+  "response": "...",
+  "total_duration": 13300000,
+  "prompt_eval_duration": 1000000,
+  "eval_duration": 12200000,
+  "done": true
+}
+```
+
+**Advanced:**
+- Pipe results with `jq`:
   ```bash
-  python3 ollama-prompt.py --prompt "..." | jq .eval_count
+  ollama-prompt --prompt "Critical design flaws in utils.py?" | jq .eval_count
   ```
-- Integrate in agent loops or cost dashboards:
-  - Use `eval_count` to track cost and offload efficiency.
-  - Use `prompt_eval_count` for context window analytics.
-- Change `model` for any Ollama-supported LLM.
+- Integrate into agent loops or analytics dashboards via JSON output.
 
 ***
 
-## **Troubleshooting**
-- If you get `ModuleNotFoundError: ollama`, ensure `pip install ollama` matches the Python interpreter used.
-- Ollama must be running locally for API requests to succeed.
+## Troubleshooting
+
+- If you get `ModuleNotFoundError: ollama`, ensure you ran `pip install ollama` in the correct Python environment.
+- Ollama server must be running locally for requests to succeed (`ollama serve`).
 - For maximum context windows, check your model’s max token support.
 
 ***
 
-## **License**
-MIT (see [Ollama license](https://ollama.com/))
+## Development & Contributing
+
+**Editable Install:**
+
+```bash
+git clone https://github.com/dansasser/ollama-prompt.git
+cd ollama-prompt
+pip install -e .
+```
+
+**To contribute:**
+- Fork the repo, create a branch, submit PRs.
+- Open issues for bugs/feature requests.
 
 ***
 
-### **Credits**
-Developed by Daniel T Sasser II (and Comet Assistant) for robust code offload workflows, AGI agent orchestration, and token/cost analytics.
+## License
+
+MIT License (see Ollama license for server terms).
+
+## Credits
+
+Developed by Daniel T Sasser II for robust code offload workflows, AGI agent orchestration, and token/cost analytics.
 
 ***
 
-*For help or suggestions, open an issue or contact the developer.*
+
+[1](https://pypi.org/project/ollama-prompt/)
