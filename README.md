@@ -126,8 +126,6 @@ Security and operational notes
 - For reproducibility, include file metadata (commit hash or path/mtime) in prompts or outputs when necessary.
 - For large repos prefer a retrieval/indexing layer (embeddings + vector DB) rather than inlining many big files in one prompt.
 
-Placement suggestion
-- Insert this subsection under the README’s Usage section (right after the "Custom Flags" examples) so users see the new behavior alongside the other flags and examples.
 
 - Pipe results with `jq`:
   ```bash
