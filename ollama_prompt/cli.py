@@ -44,7 +44,7 @@ def expand_file_refs_in_prompt(prompt, repo_root=".", max_bytes=DEFAULT_MAX_FILE
     - Avoid replacing email-like @user tokens by requiring a path-like string (contains '/' or starts with ./ ../ or /).
     """
     # Regex: @ followed by a path-like token (no whitespace). Require either a slash or starting with ./ or ../ or /
-    pattern = re.compile(r'@(?P<path>(?:\.\.\/|\./|\/)[^\s@]+|[^\s@]*\/[^\s@]+)')
+    pattern = re.compile(r'@(?P<path>(?:\.\.[/\\]|\.[/\\]|[/\\])[^\s@]+|[^\s@]*[/\\][^\s@]+)')
 
     def _repl(m):
         path = m.group("path")
