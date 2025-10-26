@@ -69,6 +69,7 @@ def main():
     parser.add_argument('--max_tokens', type=int, default=2048, help="Max tokens for response")
     parser.add_argument('--repo-root', default='.', help="Repository root used to resolve @file references (default: current directory).")
     parser.add_argument('--max-file-bytes', type=int, default=DEFAULT_MAX_FILE_BYTES, help="Max bytes to read from each referenced file to avoid excessive prompts.")
+    parser.add_argument('--think', action='store_true', help='Enable thinking mode for supported models')
     args = parser.parse_args()
 
     # Expand file references like @./path/to/file before calling the model.
@@ -78,13 +79,18 @@ def main():
         print(json.dumps({"error": f"failed to expand file refs: {e}"}))
         return
 
+    options = {
+        "temperature": args.temperature,
+        "num_predict": args.max_tokens
+    }
+
+    if args.think:
+        options['think'] = True
+
     result = ollama.generate(
         model=args.model,
         prompt=prompt_with_files,
-        options={
-            "temperature": args.temperature,
-            "num_predict": args.max_tokens
-        },
+        options=options,
         stream=False
     )
 
