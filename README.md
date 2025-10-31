@@ -16,6 +16,7 @@
 
 - Flexible CLI flags: set prompt, model, temperature, and token count
 - Prints **full verbose JSON**: includes response text, token usage (`prompt_eval_count`, `eval_count`), and engine stats
+- Session management with persistent conversation context across CLI invocations
 - Integrates easily into developer pipelines (PowerShell, Bash, agent loops)
 - Works on Windows, Mac, Linux (Python 3.7+) with Ollama installed
 
@@ -54,20 +55,30 @@ You must have the Ollama server running locally:
 ollama serve
 ```
 
+**Note:** By default, ollama-prompt automatically creates conversation sessions to maintain context across multiple invocations. Use `--no-session` for stateless, one-off queries.
+
 **Basic Example:**
 ```bash
 ollama-prompt --prompt "Summarize the architecture in src/modules." --model deepseek-v3.1:671b-cloud
 ```
+
+*Note: Output will include a `session_id` field for conversation continuity. See [Session Management](#session-management) section below.*
 
 **Custom Flags:**
 ```bash
 ollama-prompt --prompt "Evaluate performance of sorting algorithms." --model deepseek-v3.1:671b-cloud --temperature 0.05 --max_tokens 4096
 ```
 
+**Stateless Mode (no session):**
+```bash
+ollama-prompt --prompt "Quick calculation: what is 2+2?" --model deepseek-v3.1:671b-cloud --no-session
+```
+
 **Output Example (JSON):**
 ```json
 {
   "model": "deepseek-v3.1:671b-cloud",
+  "session_id": "abc-123-def-456",
   "prompt_eval_count": 38,
   "eval_count": 93,
   "response": "...",
@@ -126,6 +137,10 @@ Security and operational notes
 - For reproducibility, include file metadata (commit hash or path/mtime) in prompts or outputs when necessary.
 - For large repos prefer a retrieval/indexing layer (embeddings + vector DB) rather than inlining many big files in one prompt.
 
+**Session persistence with file references:**
+- When using `@file` references, session context is preserved across multiple file-based prompts
+- Allows building context incrementally when analyzing multiple files
+- Use `--no-session` if file analysis should be independent
 
 - Pipe results with `jq`:
   ```bash
@@ -189,7 +204,7 @@ ollama-prompt --purge 30                   # Remove sessions older than 30 days
 
 `ollama-prompt` is built to be a foundational component for AGI agent orchestration. It enables a powerful, local-first architecture where a high-level orchestrator (like another AI or a CI/CD script) can spawn `ollama-prompt` commands as **decoupled, cost-aware "sub-agents."**
 
-This subprocess model provides explicit, auditable receipts (the JSON output) for every task and allows for true OS-level parallelism.
+This subprocess model provides explicit, auditable receipts (the JSON output) for every task and allows for true OS-level parallelism. The tool includes a session management layer that maintains conversation context between invocations by default, enabling stateful multi-turn interactions while preserving the benefits of the subprocess architecture.
 
 To learn more about this design pattern and how to implement it:
 
@@ -201,7 +216,9 @@ To learn more about this design pattern and how to implement it:
 
 - If you get `ModuleNotFoundError: ollama`, ensure you ran `pip install ollama` in the correct Python environment.
 - Ollama server must be running locally for requests to succeed (`ollama serve`).
-- For maximum context windows, check your model’s max token support.
+- For maximum context windows, check your model's max token support.
+- **Unexpected session_id in output?** Sessions are auto-created by default in v1.2.0+. This is normal behavior. Use `--no-session` for stateless operation.
+- **Session context not persisting?** Ensure you're using the same `--session-id` value across invocations. Use `--list-sessions` to see available sessions.
 
 ***
 
