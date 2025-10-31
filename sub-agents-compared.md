@@ -1,8 +1,4 @@
-Here is a summary of our discussion, formatted for a comparison document for your repository.
-
----
-
-### Architectural Comparison: `ollama-prompt` vs. Integrated Agent Systems
+# Architectural Comparison: `ollama-prompt` vs. Integrated Agent Systems
 
 This document compares two distinct architectures for building multi-agent AI systems:
 
@@ -11,7 +7,7 @@ This document compares two distinct architectures for building multi-agent AI sy
 
 `ollama-prompt` is the key enabler for this second, local-first model.
 
-### Comparison Table
+## Comparison Table
 
 | Feature | Integrated Model (e.g., Claude Sub-Agents) | Decoupled Model (via `ollama-prompt`) |
 | :--- | :--- | :--- |
@@ -24,7 +20,7 @@ This document compares two distinct architectures for building multi-agent AI sy
 | **Transparency & Control** | Low ("black-box"). The developer trusts the orchestrator to manage its agents. | **High ("glass-box").** The developer has full control over the subprocess and gets auditable proof of its work. |
 | **Best For** | Users who want a powerful, "all-in-one" solution without managing infrastructure. | Developers building local-first, auditable, or budget-aware AGI systems on *any* Ollama model. |
 
-### Summary
+## Summary
 
 The `ollama-prompt` tool is not just a simple prompt wrapper; it is a foundational component for a **decoupled, multi-agent architecture**.
 
