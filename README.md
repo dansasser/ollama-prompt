@@ -135,6 +135,56 @@ Security and operational notes
 
 ***
 
+## Session Management
+
+**NEW:** ollama-prompt now supports persistent conversation sessions!
+
+**Quick Start:**
+
+```bash
+# First question - auto-creates session
+ollama-prompt --prompt "What is 2+2?"
+# Output includes: "session_id": "abc-123-def-456"
+
+# Continue conversation - context automatically included
+ollama-prompt --prompt "What about 3+3?" --session-id abc-123-def-456
+```
+
+### Key Features
+
+- **Auto-creates sessions** on first prompt (no flags needed!)
+- **Context persistence** across multiple CLI invocations
+- **Smart pruning** when approaching token limits
+- **Local storage** (SQLite database, no cloud dependency)
+- **Session utilities** (list, info, cleanup)
+
+### Session Flags
+
+- `--session-id <id>` - Continue existing conversation
+- `--no-session` - Stateless mode (no DB storage)
+- `--max-context-tokens <num>` - Override context limit (default: 64,000)
+
+### Utility Commands
+
+```bash
+ollama-prompt --list-sessions              # List all sessions
+ollama-prompt --session-info <id>          # Show session details
+ollama-prompt --purge 30                   # Remove sessions older than 30 days
+```
+
+### Use Cases
+
+- **Multi-turn conversations** - Ask follow-up questions with full context
+- **Code reviews** - Review multiple files with shared context
+- **Iterative problem-solving** - Refine solutions across multiple prompts
+- **Agent orchestration** - Maintain state across sub-agent calls
+
+**For complete documentation:** See [Session Management Guide](docs/session_management.md)
+
+**For examples:** Run `python examples/session_usage.py`
+
+***
+
 ### Architecture: A Decoupled, Subprocess-as-Agent Model
 
 `ollama-prompt` is built to be a foundational component for AGI agent orchestration. It enables a powerful, local-first architecture where a high-level orchestrator (like another AI or a CI/CD script) can spawn `ollama-prompt` commands as **decoupled, cost-aware "sub-agents."**
@@ -143,6 +193,7 @@ This subprocess model provides explicit, auditable receipts (the JSON output) fo
 
 To learn more about this design pattern and how to implement it:
 
+* **[Session Management Guide](docs/session_management.md)**: Complete guide to persistent conversation sessions with examples and best practices.
 * **[Subprocess Best Practices](ollama-prompt-subprocess-best-practices.md)**: A guide on how to safely and efficiently call `ollama-prompt` from a parent script.
 * **[Architectural Comparison](sub-agents-compared.md)**: A document comparing this decoupled model to other integrated agent architectures.
 

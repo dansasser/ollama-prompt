@@ -1,6 +1,6 @@
 [project]
 name = "ollama-prompt"
-version = "1.1.6"
+version = "1.2.0"
 description = "Ollama CLI prompt tool for local LLM code analysis"
 authors = [
     {name = "Daniel T Sasser II"}
