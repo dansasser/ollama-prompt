@@ -172,9 +172,9 @@ class SessionManager:
         # Create timestamp
         timestamp = datetime.now().isoformat()
 
-        # Estimate tokens (4 chars = 1 token)
-        user_tokens = len(user_prompt) // 4
-        assistant_tokens = len(assistant_response) // 4
+        # Estimate tokens (4 chars = 1 token, minimum 1 token for non-empty strings)
+        user_tokens = max(1, len(user_prompt) // 4) if user_prompt else 0
+        assistant_tokens = max(1, len(assistant_response) // 4) if assistant_response else 0
 
         # Append new messages
         messages.append({

@@ -226,7 +226,7 @@ class SessionDatabase:
         """
         query = """
             SELECT session_id, created_at, last_used,
-                   max_context_tokens, model_name
+                   max_context_tokens, model_name, history_json, context
             FROM sessions
             ORDER BY last_used DESC
         """

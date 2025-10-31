@@ -59,7 +59,7 @@ def test_load_existing_session():
         manager = SessionManager(db_path)
 
         # Create session
-        session1, is_new1 = manager.get_or_create_session(
+        session1, _is_new1 = manager.get_or_create_session(
             model_name='test-model',
             max_context_tokens=1000
         )
