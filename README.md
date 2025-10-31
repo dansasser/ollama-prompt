@@ -135,6 +135,17 @@ Security and operational notes
 
 ***
 
+### Architecture: A Decoupled, Subprocess-as-Agent Model
+
+`ollama-prompt` is built to be a foundational component for AGI agent orchestration. It enables a powerful, local-first architecture where a high-level orchestrator (like another AI or a CI/CD script) can spawn `ollama-prompt` commands as **decoupled, cost-aware "sub-agents."**
+
+This subprocess model provides explicit, auditable receipts (the JSON output) for every task and allows for true OS-level parallelism.
+
+To learn more about this design pattern and how to implement it:
+
+* **[Subprocess Best Practices](ollama-prompt-subprocess-best-practices.md)**: A guide on how to safely and efficiently call `ollama-prompt` from a parent script.
+* **[Architectural Comparison](sub-agents-compared.md)**: A document comparing this decoupled model to other integrated agent architectures.
+
 ## Troubleshooting
 
 - If you get `ModuleNotFoundError: ollama`, ensure you ran `pip install ollama` in the correct Python environment.
