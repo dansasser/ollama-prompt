@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import re
+import sys
 
 # Read up to this many bytes from referenced files to avoid blowing prompts.
 DEFAULT_MAX_FILE_BYTES = 200_000
@@ -112,6 +113,32 @@ def main():
         print(json.dumps({"error": f"failed to expand file refs: {e}"}))
         return
 
+    # Session management
+    session = None
+    session_manager = None
+    if not args.no_session:
+        from .session_manager import SessionManager
+        session_manager = SessionManager()
+
+        try:
+            # Get or create session
+            session, is_new = session_manager.get_or_create_session(
+                session_id=args.session_id,
+                model_name=args.model,
+                max_context_tokens=args.max_context_tokens
+            )
+
+            # Prepare prompt with session context
+            prompt_with_context = session_manager.prepare_prompt(session, prompt_with_files)
+        except Exception as e:
+            print(json.dumps({"error": f"session management failed: {e}"}))
+            if session_manager:
+                session_manager.close()
+            return
+    else:
+        # Stateless mode - no session
+        prompt_with_context = prompt_with_files
+
     options = {
         "temperature": args.temperature,
         "num_predict": args.max_tokens
@@ -122,13 +149,31 @@ def main():
 
     result = ollama.generate(
         model=args.model,
-        prompt=prompt_with_files,
+        prompt=prompt_with_context,
         options=options,
         stream=False
     )
 
+    # Update session after response
+    if session_manager and session:
+        try:
+            session_manager.update_session(
+                session,
+                prompt_with_files,
+                result['response']
+            )
+        except Exception as e:
+            print(json.dumps({"error": f"failed to update session: {e}"}), file=sys.stderr)
+        finally:
+            session_manager.close()
+
     # Convert Pydantic to dict (matches PowerShell's ConvertTo-Json)
     result_dict = result.model_dump() if hasattr(result, "model_dump") else dict(result)
+
+    # Add session_id to output if session was used
+    if session:
+        result_dict['session_id'] = session['session_id']
+
     print(json.dumps(result_dict, indent=2))
 
 

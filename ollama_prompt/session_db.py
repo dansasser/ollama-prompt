@@ -122,14 +122,17 @@ class SessionDatabase:
             cursor.execute("""
                 INSERT INTO sessions (
                     session_id, context, created_at, last_used,
-                    max_context_tokens, model_name, system_prompt
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    max_context_tokens, history_json, metadata_json,
+                    model_name, system_prompt
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 session_data['session_id'],
                 session_data.get('context', ''),
                 session_data.get('created_at', datetime.now().isoformat()),
                 session_data.get('last_used', datetime.now().isoformat()),
                 session_data.get('max_context_tokens', 64000),
+                session_data.get('history_json'),
+                session_data.get('metadata_json'),
                 session_data.get('model_name'),
                 session_data.get('system_prompt')
             ))
