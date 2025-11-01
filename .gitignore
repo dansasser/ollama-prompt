@@ -16,3 +16,4 @@ dist/
 
 # Subprocess analysis outputs
 ollama-output/
+planning/
