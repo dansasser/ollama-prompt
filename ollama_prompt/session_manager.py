@@ -119,8 +119,18 @@ class SessionManager:
 
         # Check if pruning is needed (90% threshold)
         if session_data.is_context_near_limit(threshold=0.9):
+            # Store original state to detect changes
+            original_history_json = session.get('history_json')
+
             # Prune and rebuild context
             session = self._prune_and_rebuild_context(session)
+
+            # Persist pruned state if it changed
+            if session.get('history_json') != original_history_json:
+                self.db.update_session(session['session_id'], {
+                    'history_json': session['history_json'],
+                    'context': session['context']
+                })
 
         # Get current context (may be empty for new sessions)
         context = session.get('context', '')
