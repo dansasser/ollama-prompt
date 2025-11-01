@@ -558,6 +558,6 @@ wait
 
 ## See Also
 
-- [README.md](../README.md) - Main documentation
-- [examples/session_usage.py](../examples/session_usage.py) - Python examples
-- [Subprocess Best Practices](../ollama-prompt-subprocess-best-practices.md) - Agent orchestration patterns
+- [README.md](../../README.md) - Main documentation
+- [examples/session_usage.py](../../examples/session_usage.py) - Python examples
+- [Subprocess Best Practices](../../ollama-prompt-subprocess-best-practices.md) - Agent orchestration patterns

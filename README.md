@@ -1,252 +1,244 @@
 # ollama-prompt
 
-**Local Ollama CLI Tool for Deep Analysis**
+[![PyPI version](https://badge.fury.io/py/ollama-prompt.svg)](https://badge.fury.io/py/ollama-prompt)
+[![Python 3.7+](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Overview
+[Quick Start](#quick-start) • [Documentation](docs/README.md) • [Use Cases](docs/guides/use-cases.md) • [Contributing](#contributing)
 
-**ollama-prompt** is a cross-platform Python command-line utility to interact with a local Ollama server for advanced code analysis, prompt evaluation, and cost tracking. Send custom prompts to your preferred Ollama model and receive a structured JSON response with all server-side metadata: prompt, output, token counts, durations, and much more.
+---
 
-**Ideal for:**
-- AGI agent orchestration
-- Cost-aware code review workflows
-- Analytics on token usage
-- Integrating structured LLM output into your developer pipeline
+## What is ollama-prompt?
+
+A lightweight Python CLI that transforms Ollama into a powerful analysis tool with:
+- **Session persistence** - Multi-turn conversations with full context
+- **Structured JSON output** - Token counts, timing, and metadata
+- **File references** - Inline local files with `@file` syntax
+- **Multi-agent orchestration** - Perfect for subprocess workflows
+
+**Perfect for:** Code review, analysis pipelines, agent systems, and cost-aware LLM workflows
 
 ## Features
 
-- Flexible CLI flags: set prompt, model, temperature, and token count
-- Prints **full verbose JSON**: includes response text, token usage (`prompt_eval_count`, `eval_count`), and engine stats
-- Session management with persistent conversation context across CLI invocations
-- Integrates easily into developer pipelines (PowerShell, Bash, agent loops)
-- Works on Windows, Mac, Linux (Python 3.7+) with Ollama installed
+- **Session Management** - Persistent conversations across CLI invocations
+- **Rich Metadata** - Full JSON output with token counts, timing, and cost tracking
+- **File References** - Reference local files with `@./path/to/file.py` syntax
+- **Subprocess-Friendly** - Designed for agent orchestration and automation
+- **Cloud & Local Models** - Works with both Ollama cloud models and local instances
+- **Cross-Platform** - Windows, macOS, Linux with Python 3.7+
 
-***
+---
+
+## Quick Start
+
+**Prerequisites:** [Ollama CLI installed](https://ollama.com) (server starts automatically)
+
+```bash
+# 1. Install
+pip install ollama-prompt
+
+# 2. First question (creates session automatically)
+ollama-prompt --prompt "What is 2+2?"
+
+# 3. Follow-up with context
+ollama-prompt --session-id <id-from-output> --prompt "What about 3+3?"
+```
+
+**Session created automatically!** See `session_id` in output.
+
+**Next steps:** [5-Minute Tutorial](docs/sessions/quickstart.md) | [Full CLI Reference](docs/reference.md)
+
+---
 
 ## Installation
 
-**Recommended (PyPI):**
-
+### PyPI (Recommended)
 ```bash
 pip install ollama-prompt
 ```
 
-**Requirements:**
-- Python 3.7 or higher
-- Local Ollama server running (`ollama serve`)
-
-**Alternative: Development/Manual Install**
-
-Clone the repository and install in editable mode:
-
+### Development Install
 ```bash
 git clone https://github.com/dansasser/ollama-prompt.git
 cd ollama-prompt
 pip install -e .
 ```
 
-***
+### Prerequisites
+- Python 3.7 or higher
+- [Ollama](https://ollama.com) installed and running
+- For cloud models: `ollama signin` (one-time authentication)
+
+**Verify installation:**
+```bash
+ollama-prompt --help
+ollama list  # Check available models
+```
+
+**Full setup guide:** [Prerequisites Documentation](docs/reference.md#prerequisites--setup)
+
+---
 
 ## Usage
 
-**Quick Start:**
-
-You must have the Ollama server running locally:
+### Basic Example
 ```bash
-ollama serve
+ollama-prompt --prompt "Explain Python decorators" \
+              --model deepseek-v3.1:671b-cloud
 ```
 
-**Note:** By default, ollama-prompt automatically creates conversation sessions to maintain context across multiple invocations. Use `--no-session` for stateless, one-off queries.
-
-**Basic Example:**
+### Multi-Turn Conversation
 ```bash
-ollama-prompt --prompt "Summarize the architecture in src/modules." --model deepseek-v3.1:671b-cloud
+# First question
+ollama-prompt --prompt "Who wrote Hamlet?" > out.json
+
+# Follow-up (remembers context)
+SESSION_ID=$(jq -r '.session_id' out.json)
+ollama-prompt --session-id $SESSION_ID --prompt "When was he born?"
 ```
 
-*Note: Output will include a `session_id` field for conversation continuity. See [Session Management](#session-management) section below.*
-
-**Custom Flags:**
+### File Analysis
 ```bash
-ollama-prompt --prompt "Evaluate performance of sorting algorithms." --model deepseek-v3.1:671b-cloud --temperature 0.05 --max_tokens 4096
+ollama-prompt --prompt "Review @./src/auth.py for security issues"
 ```
 
-**Stateless Mode (no session):**
+### Stateless Mode
 ```bash
-ollama-prompt --prompt "Quick calculation: what is 2+2?" --model deepseek-v3.1:671b-cloud --no-session
+ollama-prompt --prompt "Quick question" --no-session
 ```
 
-**Output Example (JSON):**
-```json
-{
-  "model": "deepseek-v3.1:671b-cloud",
-  "session_id": "abc-123-def-456",
-  "prompt_eval_count": 38,
-  "eval_count": 93,
-  "response": "...",
-  "total_duration": 13300000,
-  "prompt_eval_duration": 1000000,
-  "eval_duration": 12200000,
-  "done": true
-}
-```
+**More examples:** [Use Cases Guide](docs/guides/use-cases.md) with 12 real-world scenarios
 
-**Advanced:**
+---
 
-### Inlining local files in prompts (new: @file refs)
+## Documentation
 
-You can reference local files directly inside a prompt using an `@` token. The CLI supports both Unix-style and Windows-style paths (forward and backslashes). When the CLI sees an `@path` token (for example `@./README.md` or `@docs\design.md`), it will read that file from disk (relative to `--repo-root`), inline its contents (bounded by `--max-file-bytes`), and send the combined prompt to the Ollama model. This lets remote orchestrators send only a short instruction like `analyze @./this-file.md` instead of embedding the full file content themselves.
+**[Complete Documentation](docs/README.md)** - Full guide navigation and reference
 
-Syntax and rules
-- Token: `@<path>` where `<path>` must be path-like:
-  - starts with `./`, `../`, `/`, `\` or
-  - contains a path separator (`/` or `\`).
-  This reduces accidental expansion of email-like tokens (e.g. `@user`).
-- Examples of valid tokens:
-  - Unix: `@./README.md`, `@src/module/file.py`, `@/home/dev/project/notes.md`
-  - Windows: `@.\README.md`, `@src\module\file.py`, `@\C:\project\notes.md`
-- Files are read from disk by the CLI process before calling the local Ollama server.
-- Each referenced file is read up to `--max-file-bytes` bytes (default: 200000) and will be marked as `[TRUNCATED]` if larger.
-- Paths are resolved relative to `--repo-root` (default: `.`). Absolute paths are allowed only if they reside inside `--repo-root`.
+**Quick Links:**
+- [5-Minute Quick Start](docs/sessions/quickstart.md)
+- [Session Management Guide](docs/sessions/session-management.md)
+- [Complete CLI Reference](docs/reference.md)
 
-Examples
-- Summarize a README (Unix):
-```bash
-ollama-prompt --prompt "@./README.md Summarize the contents of this README" --model deepseek-v3.1:671b-cloud
-```
+---
 
-- Summarize a README (Windows PowerShell):
-```powershell
-ollama-prompt --prompt "@.\README.md Summarize the contents of this README" --model deepseek-v3.1:671b-cloud
-```
+## Use Cases
 
-- Ask for fixes for a file (repo located at C:\projects\app):
-```bash
-ollama-prompt --prompt "Find bugs in @src\app\main.py" \
-  --repo-root C:\projects\app \
-  --model deepseek-v3.1:671b-cloud
-```
+**Software Development:**
+- Multi-file code review with shared context
+- Iterative debugging sessions
+- Architecture analysis across modules
 
-Flags to document
-- `--repo-root`: Directory used to resolve `@file` references and to constrain file reads. Default is current working directory.
-- `--max-file-bytes`: Maximum number of bytes to read and inline for each referenced file. Large files will be truncated and the model will see a `[TRUNCATED]` marker.
-- Existing flags still apply: `--model`, `--temperature`, `--max_tokens`.
+**Multi-Agent Systems:**
+- Subprocess-based agent orchestration
+- Context-aware analysis pipelines
+- Cost tracking for LLM operations
 
-Security and operational notes
-- Do not expose machines running this CLI (or its HTTP wrapper) to untrusted networks without authentication; the CLI will read local files and inline them into prompts.
-- Use a restrictive `--repo-root` to avoid allowing arbitrary filesystem reads.
-- Keep per-file limits (`--max-file-bytes`) conservative for very large repos.
-- For reproducibility, include file metadata (commit hash or path/mtime) in prompts or outputs when necessary.
-- For large repos prefer a retrieval/indexing layer (embeddings + vector DB) rather than inlining many big files in one prompt.
+**Data Analysis:**
+- Sequential data exploration with memory
+- Research workflows with source tracking
+- Report generation with conversation history
 
-**Session persistence with file references:**
-- When using `@file` references, session context is preserved across multiple file-based prompts
-- Allows building context incrementally when analyzing multiple files
-- Use `--no-session` if file analysis should be independent
+**See all 12 scenarios:** [Use Cases Guide](docs/guides/use-cases.md)
 
-- Pipe results with `jq`:
-  ```bash
-  ollama-prompt --prompt "Critical design flaws in utils.py?" | jq .eval_count
-  ```
-- Integrate into agent loops or analytics dashboards via JSON output.
+---
 
-***
+## Why ollama-prompt?
 
-## Session Management
+**vs. Direct Ollama API:**
+- Session persistence (no manual context management)
+- Structured JSON output (token counts, timing, metadata)
+- File reference syntax (no manual file reading)
 
-**NEW:** ollama-prompt now supports persistent conversation sessions!
+**vs. Other CLI Tools:**
+- Session-first design (context by default)
+- Subprocess-optimized (perfect for agent orchestration)
+- Local-first (SQLite, no cloud dependency)
 
-**Quick Start:**
+**Built for:**
+- Developers building agent systems
+- Code analysis automation
+- Cost-aware LLM workflows
+- Multi-turn conversations at scale
 
-```bash
-# First question - auto-creates session
-ollama-prompt --prompt "What is 2+2?"
-# Output includes: "session_id": "abc-123-def-456"
+**Architecture:** [Subprocess Best Practices](docs/subprocess-best-practices.md) | [Architectural Comparison](docs/sub-agents-compared.md)
 
-# Continue conversation - context automatically included
-ollama-prompt --prompt "What about 3+3?" --session-id abc-123-def-456
-```
-
-### Key Features
-
-- **Auto-creates sessions** on first prompt (no flags needed!)
-- **Context persistence** across multiple CLI invocations
-- **Smart pruning** when approaching token limits
-- **Local storage** (SQLite database, no cloud dependency)
-- **Session utilities** (list, info, cleanup)
-
-### Session Flags
-
-- `--session-id <id>` - Continue existing conversation
-- `--no-session` - Stateless mode (no DB storage)
-- `--max-context-tokens <num>` - Override context limit (default: 64,000)
-
-### Utility Commands
-
-```bash
-ollama-prompt --list-sessions              # List all sessions
-ollama-prompt --session-info <id>          # Show session details
-ollama-prompt --purge 30                   # Remove sessions older than 30 days
-```
-
-### Use Cases
-
-- **Multi-turn conversations** - Ask follow-up questions with full context
-- **Code reviews** - Review multiple files with shared context
-- **Iterative problem-solving** - Refine solutions across multiple prompts
-- **Agent orchestration** - Maintain state across sub-agent calls
-
-**For complete documentation:** See [Session Management Guide](docs/session_management.md)
-
-**For examples:** Run `python examples/session_usage.py`
-
-***
-
-### Architecture: A Decoupled, Subprocess-as-Agent Model
-
-`ollama-prompt` is built to be a foundational component for AGI agent orchestration. It enables a powerful, local-first architecture where a high-level orchestrator (like another AI or a CI/CD script) can spawn `ollama-prompt` commands as **decoupled, cost-aware "sub-agents."**
-
-This subprocess model provides explicit, auditable receipts (the JSON output) for every task and allows for true OS-level parallelism. The tool includes a session management layer that maintains conversation context between invocations by default, enabling stateful multi-turn interactions while preserving the benefits of the subprocess architecture.
-
-To learn more about this design pattern and how to implement it:
-
-* **[Session Management Guide](docs/session_management.md)**: Complete guide to persistent conversation sessions with examples and best practices.
-* **[Subprocess Best Practices](ollama-prompt-subprocess-best-practices.md)**: A guide on how to safely and efficiently call `ollama-prompt` from a parent script.
-* **[Architectural Comparison](sub-agents-compared.md)**: A document comparing this decoupled model to other integrated agent architectures.
+---
 
 ## Troubleshooting
 
 - If you get `ModuleNotFoundError: ollama`, ensure you ran `pip install ollama` in the correct Python environment.
-- Ollama server must be running locally for requests to succeed (`ollama serve`).
+- Ensure Ollama CLI is installed (`ollama --version` should work). The server starts automatically when needed.
 - For maximum context windows, check your model's max token support.
 - **Unexpected session_id in output?** Sessions are auto-created by default in v1.2.0+. This is normal behavior. Use `--no-session` for stateless operation.
 - **Session context not persisting?** Ensure you're using the same `--session-id` value across invocations. Use `--list-sessions` to see available sessions.
 
 ***
 
-## Development & Contributing
+## Contributing
 
-**Editable Install:**
+We welcome contributions! Here's how to get started:
 
+**Development Setup:**
 ```bash
 git clone https://github.com/dansasser/ollama-prompt.git
 cd ollama-prompt
 pip install -e .
 ```
 
-**To contribute:**
-- Fork the repo, create a branch, submit PRs.
-- Open issues for bugs/feature requests.
+**Running Tests:**
+```bash
+pytest
+```
 
-***
+**Contribution Guidelines:**
+- Fork the repo and create a branch
+- Write tests for new features
+- Follow existing code style
+- Submit PR with clear description
+
+**Areas We Need Help:**
+- Documentation improvements
+- New use case examples
+- Bug reports and fixes
+- Feature suggestions
+
+**Questions?** Open an [issue](https://github.com/dansasser/ollama-prompt/issues) or discussion.
+
+---
+
+## Community & Support
+
+- **Bug Reports:** [GitHub Issues](https://github.com/dansasser/ollama-prompt/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/dansasser/ollama-prompt/discussions)
+- **Documentation:** [docs/README.md](docs/README.md)
+- **Troubleshooting:** [Reference Guide](docs/reference.md#troubleshooting-common-issues)
+
+---
 
 ## License
 
-MIT License (see Ollama license for server terms).
+MIT License - see [LICENSE](LICENSE) file for details.
+
+**Third-Party Licenses:**
+- Uses [Ollama](https://ollama.com) (separate licensing)
+
+---
 
 ## Credits
 
-Developed by Daniel T Sasser II for robust code offload workflows, AGI agent orchestration, and token/cost analytics.
+**Author:** [Daniel T. Sasser II](./AUTHOR)
+- GitHub: [github.com/dansasser](https://github.com/dansasser)
+- Blog: [dansasser.me](https://dansasser.me)
 
-***
+**Built With:**
+- [Ollama](https://ollama.com) - Local LLM runtime
+- [Python](https://python.org) - Language and ecosystem
 
+**Acknowledgments:**
+- Inspired by the need for structured, cost-aware LLM workflows
+- Built for the AI agent orchestration community
 
-[1](https://pypi.org/project/ollama-prompt/)
+---
+
+[PyPI Package](https://pypi.org/project/ollama-prompt/)

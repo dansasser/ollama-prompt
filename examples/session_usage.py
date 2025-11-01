@@ -293,7 +293,7 @@ def main():
         print("# All examples completed successfully!")
         print("#" * 60)
         print("\nFor more information, see:")
-        print("  - docs/session_management.md - Comprehensive guide")
+        print("  - docs/sessions/session-management.md - Comprehensive guide")
         print("  - README.md - Quick start and overview")
 
     except KeyboardInterrupt:
