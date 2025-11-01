@@ -223,6 +223,11 @@ class SessionManager:
             'last_used': timestamp
         })
 
+        # Update in-memory session dict to keep it in sync
+        session['history_json'] = history_json
+        session['context'] = cached_context
+        session['last_used'] = timestamp
+
     def _prune_and_rebuild_context(self, session: Dict[str, Any]) -> Dict[str, Any]:
         """
         Prune oldest messages when approaching token limit.
