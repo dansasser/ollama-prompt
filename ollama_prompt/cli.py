@@ -62,6 +62,11 @@ def expand_file_refs_in_prompt(prompt, repo_root=".", max_bytes=DEFAULT_MAX_FILE
     return expanded
 
 def main():
+    """
+    Command-line entry point that expands @file references in a prompt, sends the expanded prompt to a local Ollama model, and prints the full verbose JSON response.
+    
+    Parses these CLI options: --prompt (required), --model, --temperature, --max_tokens, --repo-root, --max-file-bytes, and --think. The function expands any @<path> tokens in the prompt by inlining file contents (bounded by --max-file-bytes), calls ollama.generate with the provided model and options, and writes the resulting response object as pretty-printed JSON to stdout. If file expansion fails, prints a JSON error object and exits.
+    """
     parser = argparse.ArgumentParser(description="Send a prompt to local Ollama and get full verbose JSON response (just like PowerShell). Supports file refs like @./this-file.md which are inlined from the local repo before sending to the model.")
     parser.add_argument('--prompt', required=True, help="Prompt to send to the model. Use @path tokens to inline files (e.g. '@./README.md Explain this file').")
     parser.add_argument('--model', default="deepseek-v3.1:671b-cloud", help="Model name")
