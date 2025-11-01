@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import re
+import sys
 
 # Read up to this many bytes from referenced files to avoid blowing prompts.
 DEFAULT_MAX_FILE_BYTES = 200_000
@@ -63,13 +64,47 @@ def expand_file_refs_in_prompt(prompt, repo_root=".", max_bytes=DEFAULT_MAX_FILE
 
 def main():
     parser = argparse.ArgumentParser(description="Send a prompt to local Ollama and get full verbose JSON response (just like PowerShell). Supports file refs like @./this-file.md which are inlined from the local repo before sending to the model.")
-    parser.add_argument('--prompt', required=True, help="Prompt to send to the model. Use @path tokens to inline files (e.g. '@./README.md Explain this file').")
+    parser.add_argument('--prompt', help="Prompt to send to the model. Use @path tokens to inline files (e.g. '@./README.md Explain this file'). Not required for utility commands.")
     parser.add_argument('--model', default="deepseek-v3.1:671b-cloud", help="Model name")
     parser.add_argument('--temperature', type=float, default=0.1, help="Sampling temperature")
     parser.add_argument('--max_tokens', type=int, default=2048, help="Max tokens for response")
     parser.add_argument('--repo-root', default='.', help="Repository root used to resolve @file references (default: current directory).")
     parser.add_argument('--max-file-bytes', type=int, default=DEFAULT_MAX_FILE_BYTES, help="Max bytes to read from each referenced file to avoid excessive prompts.")
+    parser.add_argument('--think', action='store_true', help='Enable thinking mode for supported models')
+
+    # Session management flags
+    session_group = parser.add_argument_group('session management', 'Manage conversation context across multiple prompts')
+    session_group.add_argument('--session-id', type=str, help='Continue existing session by ID')
+    session_group.add_argument('--no-session', action='store_true', help='Run in stateless mode (no session stored)')
+    session_group.add_argument('--max-context-tokens', type=int, help='Override max context tokens for this session (default: 64000)')
+
+    # Utility command flags
+    utility_group = parser.add_argument_group('session utilities', 'Manage stored sessions')
+    utility_group.add_argument('--list-sessions', action='store_true', help='List all stored sessions and exit')
+    utility_group.add_argument('--purge', type=int, metavar='DAYS', help='Remove sessions older than DAYS and exit')
+    utility_group.add_argument('--session-info', type=str, metavar='ID', help='Show details for session ID and exit')
+
     args = parser.parse_args()
+
+    # Argument validation
+    if args.session_id and args.no_session:
+        parser.error("--session-id and --no-session are mutually exclusive")
+
+    # Check if utility command was requested
+    utility_commands = [args.list_sessions, args.purge, args.session_info]
+    if any(utility_commands):
+        # Utility commands don't require --prompt
+        if not args.prompt:
+            # Make --prompt optional for utility commands by setting empty default
+            args.prompt = None
+        # Route to utility command handler
+        from .session_utils import handle_utility_command
+        handle_utility_command(args)
+        return
+
+    # If not a utility command, --prompt is required
+    if not args.prompt:
+        parser.error("--prompt is required for normal operation")
 
     # Expand file references like @./path/to/file before calling the model.
     try:
@@ -78,18 +113,67 @@ def main():
         print(json.dumps({"error": f"failed to expand file refs: {e}"}))
         return
 
+    # Session management
+    session = None
+    session_manager = None
+    if not args.no_session:
+        from .session_manager import SessionManager
+        session_manager = SessionManager()
+
+        try:
+            # Get or create session
+            session, is_new = session_manager.get_or_create_session(
+                session_id=args.session_id,
+                model_name=args.model,
+                max_context_tokens=args.max_context_tokens
+            )
+
+            # Prepare prompt with session context
+            prompt_with_context = session_manager.prepare_prompt(session, prompt_with_files)
+        except Exception as e:
+            print(json.dumps({"error": f"session management failed: {e}"}))
+            if session_manager:
+                session_manager.close()
+            return
+    else:
+        # Stateless mode - no session
+        prompt_with_context = prompt_with_files
+
+    options = {
+        "temperature": args.temperature,
+        "num_predict": args.max_tokens
+    }
+
+    if args.think:
+        options['think'] = True
+
     result = ollama.generate(
         model=args.model,
-        prompt=prompt_with_files,
-        options={
-            "temperature": args.temperature,
-            "num_predict": args.max_tokens
-        },
+        prompt=prompt_with_context,
+        options=options,
         stream=False
     )
 
+    # Update session after response
+    if session_manager and session:
+        try:
+            session_manager.update_session(
+                session,
+                prompt_with_files,
+                result['response']
+            )
+        except Exception as e:
+            print(json.dumps({"error": f"failed to update session: {e}"}), file=sys.stderr)
+        finally:
+            session_manager.close()
+
     # Convert Pydantic to dict (matches PowerShell's ConvertTo-Json)
     result_dict = result.model_dump() if hasattr(result, "model_dump") else dict(result)
+
+    # Add session_id to output if session was used
+    if session:
+        result_dict['session_id'] = session['session_id']
+
     print(json.dumps(result_dict, indent=2))
 
 

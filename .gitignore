@@ -1,2 +1,19 @@
 build/
 ollama_prompt.egg-info/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+.pytest_cache/
+
+# Claude Code directory
+.claude/
+
+# Subprocess analysis outputs
+ollama-output/
+planning/
