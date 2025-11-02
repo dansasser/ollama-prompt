@@ -50,7 +50,7 @@ ollama-prompt --session-id <uuid-from-previous-output> --prompt "What about the 
 ### Ollama CLI Installation
 
 **Installation Required:**
-- Download and install Ollama from [ollama.ai](https://ollama.ai)
+- Download and install Ollama from [ollama.com](https://ollama.com)
 - Follow platform-specific installation instructions (Windows, macOS, or Linux)
 - Ollama CLI automatically starts the server when needed
 

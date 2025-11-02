@@ -81,7 +81,12 @@ class SessionManager:
 
         # Get max_context_tokens from env or use default
         if max_context_tokens is None:
-            max_context_tokens = int(os.getenv('OLLAMA_PROMPT_MAX_CONTEXT_TOKENS', '64000'))
+            env_value = os.getenv('OLLAMA_PROMPT_MAX_CONTEXT_TOKENS', '64000')
+            try:
+                max_context_tokens = int(env_value)
+            except ValueError:
+                max_context_tokens = 64000
+                print(f"Warning: Invalid OLLAMA_PROMPT_MAX_CONTEXT_TOKENS value '{env_value}', using default 64000", file=__import__('sys').stderr)
 
         session_data = {
             'session_id': new_session_id,
@@ -215,7 +220,8 @@ class SessionManager:
                 total_tokens -= removed.get('tokens', 0)
 
                 # If there's an assistant message after the user message, remove it too
-                if messages and messages[0].get('role') == 'assistant':
+                # But only if we'll still have at least 2 messages after removal
+                if messages and messages[0].get('role') == 'assistant' and len(messages) >= 3:
                     removed = messages.pop(0)
                     total_tokens -= removed.get('tokens', 0)
 
@@ -275,7 +281,8 @@ class SessionManager:
             total_tokens -= removed.get('tokens', 0)
 
             # If there's an assistant message after the user message, remove it too
-            if messages and messages[0].get('role') == 'assistant':
+            # But only if we'll still have at least 2 messages after removal
+            if messages and messages[0].get('role') == 'assistant' and len(messages) > 2:
                 removed = messages.pop(0)
                 total_tokens -= removed.get('tokens', 0)
 
