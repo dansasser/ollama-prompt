@@ -282,7 +282,7 @@ class SessionManager:
 
             # If there's an assistant message after the user message, remove it too
             # But only if we'll still have at least 2 messages after removal
-            if messages and messages[0].get('role') == 'assistant' and len(messages) > 1:
+            if messages and messages[0].get('role') == 'assistant' and len(messages) > 2:
                 removed = messages.pop(0)
                 total_tokens -= removed.get('tokens', 0)
 
