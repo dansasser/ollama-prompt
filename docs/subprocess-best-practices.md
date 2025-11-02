@@ -1,8 +1,10 @@
 # ollama-prompt Subprocess Best Practices
 
-**Purpose:** Standardized patterns for using ollama-prompt as a subprocess in multi-agent analysis workflows.
+**Purpose:** Standardized patterns for terminal AI assistants (Claude, Codex, Gemini CLI, Cursor, etc.) calling ollama-prompt as a subprocess to preserve context windows and delegate deep analysis.
 
-**Last Updated:** 2025-10-26
+**Primary Callers:** Interactive terminal AI assistants that need to preserve their context budget while performing deep analysis.
+
+**Last Updated:** 2025-11-01
 
 ---
 

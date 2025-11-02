@@ -2,6 +2,8 @@
 
 **Complete guide to ollama-prompt v1.2.0 session management and best practices**
 
+**Primary Use Case:** ollama-prompt is designed as a subprocess tool for terminal-based AI assistants (Claude, Codex, Gemini CLI, Cursor, etc.). When AI agents need deep analysis without consuming their context window, they delegate to ollama-prompt via subprocess calls.
+
 ---
 
 ## Quick Navigation

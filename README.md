@@ -16,7 +16,40 @@ A lightweight Python CLI that transforms Ollama into a powerful analysis tool wi
 - **File references** - Inline local files with `@file` syntax
 - **Multi-agent orchestration** - Perfect for subprocess workflows
 
-**Perfect for:** Code review, analysis pipelines, agent systems, and cost-aware LLM workflows
+**Perfect for:** Terminal AI assistants (Claude, Codex, Gemini CLI), subprocess orchestration, and cost-aware workflows
+
+---
+
+## Primary Use Case: AI Agent Subprocess Integration
+
+**Built for terminal-based AI assistants: Claude, Codex, Gemini CLI, and other interactive AI tools.**
+
+When terminal AI agents need deep analysis but must preserve their context window, they delegate to ollama-prompt as a subprocess:
+
+**How Claude Uses This:**
+1. **Context Preservation** - Claude delegates heavy analysis without consuming its 200K token budget
+2. **Structured Parsing** - JSON output with token counts, timing, and session IDs
+3. **File Reference Chaining** - `@file` syntax lets Claude reference multiple files in one call
+4. **Session Continuity** - Multi-turn analysis without manual context management
+
+**Example Claude Code Workflow:**
+```bash
+# Claude delegates codebase analysis to ollama-prompt
+ollama-prompt --prompt "Analyze @./src/auth.py for security issues" \
+              --model deepseek-v3.1:671b-cloud \
+              > analysis.json
+
+# Claude parses JSON response and continues with its own reasoning
+```
+
+**Who Uses This:**
+- **Primary:** Terminal AI assistants (Claude, Codex, Gemini CLI, Cursor)
+- **Secondary:** Python scripts orchestrating multi-agent workflows
+- **Advanced:** Custom AGI systems with local Ollama backends
+
+**Learn More:** [Subprocess Best Practices](docs/subprocess-best-practices.md) | [Architectural Comparison](docs/sub-agents-compared.md)
+
+---
 
 ## Features
 
@@ -156,10 +189,10 @@ ollama-prompt --prompt "Quick question" --no-session
 - Local-first (SQLite, no cloud dependency)
 
 **Built for:**
-- Developers building agent systems
-- Code analysis automation
-- Cost-aware LLM workflows
-- Multi-turn conversations at scale
+- **Terminal AI assistants (Claude, Codex, Gemini CLI)** - Delegate analysis via subprocess
+- **Context preservation** - Save your AI's token budget for reasoning
+- **Multi-agent systems** - Orchestrate parallel analysis tasks
+- **Cost-aware workflows** - Track token usage explicitly
 
 **Architecture:** [Subprocess Best Practices](docs/subprocess-best-practices.md) | [Architectural Comparison](docs/sub-agents-compared.md)
 
