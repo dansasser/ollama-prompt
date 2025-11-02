@@ -178,16 +178,6 @@ ollama-prompt --prompt "Quick question" --no-session
 
 ## Why ollama-prompt?
 
-Based on the `README.md`'s structure, the perfect place to add this comparison is in the **"Why ollama-prompt?"** section.
-
-It would replace the existing bullet-point comparisons (vs. Direct Ollama API, vs. Other CLI Tools) with your much clearer and more comprehensive table. This makes the tool's unique position immediately obvious.
-
-Here is how you could add it, formatted for the README:
-
----
-
-## Why ollama-prompt?
-
 `ollama-prompt` is a specialized tool. It's not a general-purpose CLI, but an **automation-first subprocess** designed to be called by other AI agents (like Claude or Gemini) to preserve their primary context window.
 
 This table clarifies its niche compared to other common tools:
