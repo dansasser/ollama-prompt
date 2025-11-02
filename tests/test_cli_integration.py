@@ -12,6 +12,7 @@ import subprocess
 import json
 import sys
 import os
+import tempfile
 
 
 def run_cli(*args):
@@ -25,12 +26,21 @@ def run_cli(*args):
     # This works better than python -m since the package is installed
     cmd = ['ollama-prompt'] + list(args)
 
-    # Run from current directory
+    # Create isolated temp database for each test run
+    temp_dir = tempfile.mkdtemp()
+    temp_db_path = os.path.join(temp_dir, 'test_sessions.db')
+
+    # Set up environment with isolated DB path
+    env = os.environ.copy()
+    env['OLLAMA_PROMPT_DB_PATH'] = temp_db_path
+
+    # Run from current directory with isolated environment
     result = subprocess.run(
         cmd,
         capture_output=True,
         text=True,
-        encoding='utf-8'
+        encoding='utf-8',
+        env=env
     )
     return result.returncode, result.stdout, result.stderr
 

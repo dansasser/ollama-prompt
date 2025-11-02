@@ -16,9 +16,25 @@ def safe_join_repo(repo_root, path):
         target = os.path.abspath(path)
     else:
         target = os.path.abspath(os.path.join(repo_root, path))
-    repo_root_abs = os.path.abspath(repo_root)
-    if not target.startswith(repo_root_abs):
-        raise ValueError(f"path outside repo root: {path}")
+
+    # Resolve and normalize both paths
+    try:
+        repo_root_resolved = os.path.realpath(os.path.abspath(repo_root))
+        target_resolved = os.path.realpath(target)
+
+        # On Windows, normalize case for comparison
+        if os.name == 'nt':
+            repo_root_resolved = os.path.normcase(repo_root_resolved)
+            target_resolved = os.path.normcase(target_resolved)
+
+        # Use commonpath to verify containment
+        common = os.path.commonpath([repo_root_resolved, target_resolved])
+        if common != repo_root_resolved:
+            raise ValueError(f"path outside repo root: {path}")
+    except (ValueError, OSError) as e:
+        # Propagate path resolution errors
+        raise ValueError(f"path outside repo root: {path}") from e
+
     return target
 
 def read_file_snippet(path, repo_root=".", max_bytes=DEFAULT_MAX_FILE_BYTES):
@@ -110,8 +126,8 @@ def main():
     try:
         prompt_with_files = expand_file_refs_in_prompt(args.prompt, repo_root=args.repo_root, max_bytes=args.max_file_bytes)
     except Exception as e:
-        print(json.dumps({"error": f"failed to expand file refs: {e}"}))
-        return
+        print(json.dumps({"error": f"failed to expand file refs: {e}"}), file=sys.stderr)
+        sys.exit(1)
 
     # Session management
     session = None
@@ -131,10 +147,10 @@ def main():
             # Prepare prompt with session context
             prompt_with_context = session_manager.prepare_prompt(session, prompt_with_files)
         except Exception as e:
-            print(json.dumps({"error": f"session management failed: {e}"}))
+            print(json.dumps({"error": f"session management failed: {e}"}), file=sys.stderr)
             if session_manager:
                 session_manager.close()
-            return
+            sys.exit(1)
     else:
         # Stateless mode - no session
         prompt_with_context = prompt_with_files

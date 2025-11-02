@@ -213,7 +213,9 @@ ollama-prompt --session-id $(jq -r '.session_id' out.json) --prompt "Question 2"
 ```
 
 **Sessions are stored locally:**
-- Database: `~/.ollama-prompt/sessions.db`
+- Database:
+  - Windows: `%APPDATA%\ollama-prompt\sessions.db`
+  - Unix/Linux/Mac: `~/.config/ollama-prompt/sessions.db`
 - No cloud dependency
 - Cross-platform compatible
 

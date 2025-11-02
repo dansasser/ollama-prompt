@@ -173,7 +173,7 @@ ollama-prompt --prompt "Quick question" --no-session
 - **Unexpected session_id in output?** Sessions are auto-created by default in v1.2.0+. This is normal behavior. Use `--no-session` for stateless operation.
 - **Session context not persisting?** Ensure you're using the same `--session-id` value across invocations. Use `--list-sessions` to see available sessions.
 
-**Quick Start:**
+---
 
 ## Contributing
 
