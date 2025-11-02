@@ -178,15 +178,30 @@ ollama-prompt --prompt "Quick question" --no-session
 
 ## Why ollama-prompt?
 
-**vs. Direct Ollama API:**
-- Session persistence (no manual context management)
-- Structured JSON output (token counts, timing, metadata)
-- File reference syntax (no manual file reading)
+Based on the `README.md`'s structure, the perfect place to add this comparison is in the **"Why ollama-prompt?"** section.
 
-**vs. Other CLI Tools:**
-- Session-first design (context by default)
-- Subprocess-optimized (perfect for agent orchestration)
-- Local-first (SQLite, no cloud dependency)
+It would replace the existing bullet-point comparisons (vs. Direct Ollama API, vs. Other CLI Tools) with your much clearer and more comprehensive table. This makes the tool's unique position immediately obvious.
+
+Here is how you could add it, formatted for the README:
+
+---
+
+## Why ollama-prompt?
+
+`ollama-prompt` is a specialized tool. It's not a general-purpose CLI, but an **automation-first subprocess** designed to be called by other AI agents (like Claude or Gemini) to preserve their primary context window.
+
+This table clarifies its niche compared to other common tools:
+
+### Comparison of Ollama Interaction Methods
+
+| Feature | **1. Direct Ollama API** | **2. `llm` (Simon Willison's Tool)** | **3. `ollama-prompt` (This Tool)** |
+| :--- | :--- | :--- | :--- |
+| **Primary Use** | Building custom applications (backend). | **Human-facing CLI:** A "workbench" for a user to interact with models. | **Automation-facing CLI:** A "subprocess" for *other programs* to call. |
+| **Interface** | Raw HTTP / Code Library | Interactive, user-friendly CLI. | Single-line CLI command designed for scripts. |
+| **Key "Win"** | Total flexibility. | **Universality:** Supports Ollama, OpenAI, Anthropic, etc. | **Automation:** Built to be called by other AI agents (like Claude/Gemini). |
+| **Output Format** | Raw JSON response. | Plain text (default), with a flag for JSON (`--json`). | **Structured JSON** (default), with rich metadata (tokens, time). |
+| **Session Memory** | **Manual:** You must track and resend the entire message history. | **Automatic:** Logs all prompts/responses to a local SQLite DB. | **Automatic (via flag):** Uses `--session-id` to persist context. |
+| **File Handling** | **Manual:** Requires code to read the file and inject its content. | **Manual (via piping):** Requires `cat file.py \| llm -s "..."` | **Built-in:** Simple `@./file.py` syntax in the prompt. |
 
 **Built for:**
 - **Terminal AI assistants (Claude, Codex, Gemini CLI)** - Delegate analysis via subprocess
