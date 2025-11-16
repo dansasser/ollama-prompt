@@ -18,6 +18,11 @@ from typing import Optional, Tuple, Dict, Any, List
 from .session_db import SessionDatabase
 from .models import SessionData
 
+# Resource limits to prevent exhaustion attacks
+MAX_SESSIONS = 1000  # Maximum total sessions allowed
+MAX_MESSAGE_SIZE = 1_000_000  # 1MB per message
+MAX_SESSIONS_AUTO_PURGE_DAYS = 30  # Auto-purge sessions older than this when limit reached
+
 
 class SessionManager:
     """
@@ -78,6 +83,20 @@ class SessionManager:
 
         # Create new session with auto-generated ID
         new_session_id = str(uuid.uuid4())
+
+        # SECURITY: Check session count limit to prevent resource exhaustion
+        session_count = self.db.get_session_count()
+        if session_count >= MAX_SESSIONS:
+            # Try auto-purging old sessions
+            purged = self.db.purge_sessions(MAX_SESSIONS_AUTO_PURGE_DAYS)
+            session_count = self.db.get_session_count()
+
+            if session_count >= MAX_SESSIONS:
+                raise ValueError(
+                    f"Session limit reached ({MAX_SESSIONS} sessions). "
+                    f"Auto-purged {purged} old sessions but limit still exceeded. "
+                    "Please manually purge old sessions with --purge command."
+                )
 
         # Get max_context_tokens from env or use default
         if max_context_tokens is None:
@@ -172,7 +191,22 @@ class SessionManager:
             session: Session dictionary
             user_prompt: User's prompt (without context)
             assistant_response: Model's response
+
+        Raises:
+            ValueError: If message size exceeds maximum allowed
         """
+        # SECURITY: Validate message sizes to prevent resource exhaustion
+        if len(user_prompt) > MAX_MESSAGE_SIZE:
+            raise ValueError(
+                f"User prompt too large: {len(user_prompt)} bytes "
+                f"(maximum {MAX_MESSAGE_SIZE} bytes)"
+            )
+        if len(assistant_response) > MAX_MESSAGE_SIZE:
+            raise ValueError(
+                f"Assistant response too large: {len(assistant_response)} bytes "
+                f"(maximum {MAX_MESSAGE_SIZE} bytes)"
+            )
+
         session_id = session['session_id']
 
         # Reload session from database to get latest state
