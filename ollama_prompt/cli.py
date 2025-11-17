@@ -9,6 +9,40 @@ import sys
 # Read up to this many bytes from referenced files to avoid blowing prompts.
 DEFAULT_MAX_FILE_BYTES = 200_000
 
+# Maximum prompt size to prevent ReDoS and resource exhaustion
+MAX_PROMPT_SIZE = 10_000_000  # 10MB
+
+def validate_model_name(model: str) -> str:
+    """
+    Validate model name format to prevent injection attacks.
+
+    Args:
+        model: Model name to validate
+
+    Returns:
+        str: Validated model name
+
+    Raises:
+        ValueError: If model name format is invalid
+    """
+    if not model:
+        raise ValueError("Model name cannot be empty")
+
+    # SECURITY: Allow only safe characters for model names
+    # Format: alphanumeric, dots, hyphens, underscores, colons (for tags)
+    if not re.match(r'^[a-zA-Z0-9._:-]+$', model):
+        raise ValueError(
+            f"Invalid model name format: '{model}'. "
+            "Only alphanumeric characters, dots, hyphens, underscores, and colons are allowed."
+        )
+
+    # Prevent excessively long model names
+    MAX_MODEL_NAME_LENGTH = 100
+    if len(model) > MAX_MODEL_NAME_LENGTH:
+        raise ValueError(f"Model name too long: {len(model)} characters (maximum {MAX_MODEL_NAME_LENGTH})")
+
+    return model
+
 def safe_join_repo(repo_root, path):
     """Join path to repo_root and prevent path traversal outside repo_root."""
     # Allow absolute paths but enforce they reside inside repo_root
@@ -59,12 +93,20 @@ def expand_file_refs_in_prompt(prompt, repo_root=".", max_bytes=DEFAULT_MAX_FILE
     - Token syntax: @<path-without-spaces>, e.g. @./README.md, @src/foo.py, @/absolute/path.md
     - If reading fails, an error note is inserted instead of silently dropping it.
     - Avoid replacing email-like @user tokens by requiring a path-like string (contains '/' or starts with ./ ../ or /).
+
+    Raises:
+        ValueError: If prompt exceeds maximum allowed size
     """
-    # Regex: @ followed by a path-like token (no whitespace). Require either a slash or starting with ./ or ../ or /
-    pattern = re.compile(r'@(?P<path>(?:\.\.[/\\]|\.[/\\]|[/\\])[^\s@]+|[^\s@]*[/\\][^\s@]+)')
+    # SECURITY: Prevent ReDoS and resource exhaustion with size limit
+    if len(prompt) > MAX_PROMPT_SIZE:
+        raise ValueError(f"Prompt too large: {len(prompt)} bytes (maximum {MAX_PROMPT_SIZE} bytes)")
+
+    # Simplified regex pattern to reduce backtracking risk
+    # Matches: @./ or @../ or @/ followed by non-whitespace, non-@ characters
+    pattern = re.compile(r'@((?:\.\.?/|/)[^\s@]+)')
 
     def _repl(m):
-        path = m.group("path")
+        path = m.group(1)
         res = read_file_snippet(path, repo_root=repo_root, max_bytes=max_bytes)
         if not res["ok"]:
             return f"\n\n--- FILE: {path} (ERROR: {res['error']}) ---\n"
@@ -121,6 +163,12 @@ def main():
     # If not a utility command, --prompt is required
     if not args.prompt:
         parser.error("--prompt is required for normal operation")
+
+    # Validate model name to prevent injection attacks
+    try:
+        args.model = validate_model_name(args.model)
+    except ValueError as e:
+        parser.error(str(e))
 
     # Expand file references like @./path/to/file before calling the model.
     try:
