@@ -6,8 +6,8 @@ import os
 import re
 import sys
 
-# Read up to this many bytes from referenced files to avoid blowing prompts.
-DEFAULT_MAX_FILE_BYTES = 200_000
+# Import secure file reading (TOCTOU-safe, symlink-blocking)
+from .secure_file import read_file_secure, DEFAULT_MAX_FILE_BYTES
 
 # Maximum prompt size to prevent ReDoS and resource exhaustion
 MAX_PROMPT_SIZE = 10_000_000  # 10MB
@@ -72,17 +72,16 @@ def safe_join_repo(repo_root, path):
     return target
 
 def read_file_snippet(path, repo_root=".", max_bytes=DEFAULT_MAX_FILE_BYTES):
-    """Safely read a file (bounded) and return its contents or an error string."""
-    try:
-        fp = safe_join_repo(repo_root, path)
-        with open(fp, "r", encoding="utf-8", errors="ignore") as f:
-            content = f.read(max_bytes)
-        # If file truncated, indicate that to the model so it doesn't assume full file.
-        if os.path.getsize(fp) > len(content):
-            content += "\n\n[TRUNCATED: file larger than max_bytes]\n"
-        return {"ok": True, "path": path, "content": content}
-    except Exception as e:
-        return {"ok": False, "path": path, "error": str(e)}
+    """
+    Safely read a file (bounded) and return its contents or an error string.
+
+    SECURITY: Uses TOCTOU-safe file reading with:
+    - Symlink blocking at open time (O_NOFOLLOW on Unix)
+    - File type validation (rejects devices, FIFOs, sockets)
+    - Path containment validated AFTER opening (eliminates race condition)
+    - Audit logging of all file access attempts
+    """
+    return read_file_secure(path, repo_root, max_bytes, audit=True)
 
 def expand_file_refs_in_prompt(prompt, repo_root=".", max_bytes=DEFAULT_MAX_FILE_BYTES):
     """
