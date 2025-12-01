@@ -49,9 +49,9 @@ def test_model_validation():
         validate_model_name("deepseek-v3.1:671b-cloud")
         validate_model_name("llama2")
         validate_model_name("model_v1.0")
-        print("  ✓ Valid model names accepted")
+        print("  [OK] Valid model names accepted")
     except ValueError as e:
-        print(f"  ✗ FAILED: Valid model rejected: {e}")
+        print(f"  [FAIL] FAILED: Valid model rejected: {e}")
         return False
 
     # Invalid model names (should raise ValueError)
@@ -68,12 +68,12 @@ def test_model_validation():
     for invalid_model in invalid_models:
         try:
             validate_model_name(invalid_model)
-            print(f"  ✗ FAILED: Invalid model accepted: {invalid_model}")
+            print(f"  [FAIL] FAILED: Invalid model accepted: {invalid_model}")
             return False
         except ValueError:
             pass  # Expected
 
-    print("  ✓ Invalid model names rejected")
+    print("  [OK] Invalid model names rejected")
     return True
 
 def test_sql_injection_prevention():
@@ -98,13 +98,13 @@ def test_sql_injection_prevention():
             db.update_session(session_id, {
                 "context'; DROP TABLE sessions; --": "malicious"
             })
-            print("  ✗ FAILED: SQL injection not prevented")
+            print("  [FAIL] FAILED: SQL injection not prevented")
             return False
         except ValueError as e:
             if "Invalid column name" in str(e):
-                print("  ✓ SQL injection prevented")
+                print("  [OK] SQL injection prevented")
             else:
-                print(f"  ✗ FAILED: Wrong error: {e}")
+                print(f"  [FAIL] FAILED: Wrong error: {e}")
                 return False
 
         # Valid update should still work
@@ -112,9 +112,9 @@ def test_sql_injection_prevention():
             db.update_session(session_id, {
                 'context': 'updated context'
             })
-            print("  ✓ Valid updates still work")
+            print("  [OK] Valid updates still work")
         except Exception as e:
-            print(f"  ✗ FAILED: Valid update rejected: {e}")
+            print(f"  [FAIL] FAILED: Valid update rejected: {e}")
             return False
 
     return True
@@ -126,13 +126,13 @@ def test_db_path_validation():
     # Try to use path outside home directory
     try:
         db = SessionDatabase("/etc/passwd")
-        print("  ✗ FAILED: Path traversal not prevented")
+        print("  [FAIL] FAILED: Path traversal not prevented")
         return False
     except ValueError as e:
         if "home directory" in str(e):
-            print("  ✓ Path traversal prevented")
+            print("  [OK] Path traversal prevented")
         else:
-            print(f"  ✗ FAILED: Wrong error: {e}")
+            print(f"  [FAIL] FAILED: Wrong error: {e}")
             return False
 
     # Valid path under home should work
@@ -140,9 +140,9 @@ def test_db_path_validation():
         with tempfile.TemporaryDirectory(dir=str(Path.home())) as tmpdir:
             db_path = os.path.join(tmpdir, "test.db")
             db = SessionDatabase(db_path)
-            print("  ✓ Valid paths accepted")
+            print("  [OK] Valid paths accepted")
     except Exception as e:
-        print(f"  ✗ FAILED: Valid path rejected: {e}")
+        print(f"  [FAIL] FAILED: Valid path rejected: {e}")
         return False
 
     return True
@@ -155,21 +155,21 @@ def test_redos_prevention():
     huge_prompt = "a" * (MAX_PROMPT_SIZE + 1)
     try:
         expand_file_refs_in_prompt(huge_prompt)
-        print("  ✗ FAILED: Oversized prompt not rejected")
+        print("  [FAIL] FAILED: Oversized prompt not rejected")
         return False
     except ValueError as e:
         if "too large" in str(e).lower():
-            print("  ✓ Prompt size limit enforced")
+            print("  [OK] Prompt size limit enforced")
         else:
-            print(f"  ✗ FAILED: Wrong error: {e}")
+            print(f"  [FAIL] FAILED: Wrong error: {e}")
             return False
 
     # Normal prompt should work
     try:
         result = expand_file_refs_in_prompt("Normal prompt without file refs")
-        print("  ✓ Normal prompts still work")
+        print("  [OK] Normal prompts still work")
     except Exception as e:
-        print(f"  ✗ FAILED: Normal prompt rejected: {e}")
+        print(f"  [FAIL] FAILED: Normal prompt rejected: {e}")
         return False
 
     return True
@@ -187,13 +187,13 @@ def test_resource_limits():
         with open(manager_path, 'r') as f:
             content = f.read()
             if 'MAX_SESSIONS' in content and 'MAX_MESSAGE_SIZE' in content:
-                print(f"  ✓ Resource limits defined in session_manager.py")
+                print(f"  [OK] Resource limits defined in session_manager.py")
                 return True
             else:
-                print("  ✗ FAILED: Resource limits not found")
+                print("  [FAIL] FAILED: Resource limits not found")
                 return False
     except Exception as e:
-        print(f"  ✗ FAILED: Could not verify resource limits: {e}")
+        print(f"  [FAIL] FAILED: Could not verify resource limits: {e}")
         return False
 
 def main():
@@ -215,7 +215,7 @@ def main():
         try:
             results.append(test())
         except Exception as e:
-            print(f"\n✗ Test crashed: {test.__name__}")
+            print(f"\n[FAIL] Test crashed: {test.__name__}")
             print(f"  Error: {e}")
             import traceback
             traceback.print_exc()
@@ -228,10 +228,10 @@ def main():
     print("=" * 60)
 
     if passed == total:
-        print("✓ All security fixes verified!")
+        print("[OK] All security fixes verified!")
         return 0
     else:
-        print(f"✗ {total - passed} test(s) failed")
+        print(f"[FAIL] {total - passed} test(s) failed")
         return 1
 
 if __name__ == "__main__":
