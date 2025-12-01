@@ -101,8 +101,9 @@ def expand_file_refs_in_prompt(prompt, repo_root=".", max_bytes=DEFAULT_MAX_FILE
         raise ValueError(f"Prompt too large: {len(prompt)} bytes (maximum {MAX_PROMPT_SIZE} bytes)")
 
     # Simplified regex pattern to reduce backtracking risk
-    # Matches: @./ or @../ or @/ (or backslash equivalents) followed by non-whitespace, non-@ characters
-    pattern = re.compile(r'@((?:\.\.?[/\\]|[/\\])[^\s@]+)')
+    # Matches: @./ or @../ or @/ (or backslash equivalents) followed by valid path characters
+    # Excludes: whitespace, @, and common sentence-ending punctuation (?!,;)
+    pattern = re.compile(r'@((?:\.\.?[/\\]|[/\\])[^\s@?!,;]+)')
 
     def _repl(m):
         path = m.group(1)
