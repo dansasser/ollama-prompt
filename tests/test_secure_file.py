@@ -150,10 +150,10 @@ class TestSymlinkBlocking:
             audit=False
         )
 
-        # On Unix with O_NOFOLLOW, symlinks are blocked
-        # The file might be opened or blocked depending on OS behavior
-        if not result["ok"]:
-            assert "symlink" in result["error"].lower() or "loop" in result["error"].lower()
+        # On Unix with O_NOFOLLOW, symlinks MUST be blocked
+        assert result["ok"] is False, "Symlink should be blocked by O_NOFOLLOW"
+        assert "symlink" in result["error"].lower() or "loop" in result["error"].lower(), \
+            f"Error should mention symlink: {result['error']}"
 
     def test_symlink_to_file_outside_repo_blocked(self, tmp_path):
         """Symlinks pointing outside repo should definitely be blocked."""

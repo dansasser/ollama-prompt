@@ -41,6 +41,10 @@ def _get_open_flags() -> int:
     if hasattr(os, 'O_NOCTTY'):
         flags |= os.O_NOCTTY
 
+    # On Unix, add O_NONBLOCK to prevent blocking on FIFOs/pipes
+    if hasattr(os, 'O_NONBLOCK'):
+        flags |= os.O_NONBLOCK
+
     return flags
 
 
@@ -340,14 +344,15 @@ def read_file_secure(
 
     fd = open_result["fd"]
     file_size = open_result.get("size", 0)
+    fd_closed = False
 
     try:
         # Step 2: Read content from file descriptor
         # Wrap FD in a file object for convenient reading
+        # Note: os.fdopen takes ownership of fd and closes it on exit
         with os.fdopen(fd, "r", encoding="utf-8", errors="ignore") as f:
+            fd_closed = True  # fdopen now owns the fd
             content = f.read(max_bytes)
-
-        # fd is now closed by fdopen context manager
 
         # Step 3: Add truncation notice if needed
         if file_size > len(content):
@@ -360,11 +365,12 @@ def read_file_secure(
         }
 
     except Exception as e:
-        # Make sure FD is closed on error
-        try:
-            os.close(fd)
-        except OSError:
-            pass
+        # Only close fd if fdopen hasn't taken ownership yet
+        if not fd_closed:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
 
         return {
             "ok": False,

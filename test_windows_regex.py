@@ -24,8 +24,13 @@ for test_str, should_match, expected in tests:
     match = pattern.search(test_str)
     if should_match:
         if match:
-            print(f'  [OK] {repr(test_str)} -> {repr(match.group(1))}')
-            passed += 1
+            actual = match.group(1)
+            if actual == expected:
+                print(f'  [OK] {repr(test_str)} -> {repr(actual)}')
+                passed += 1
+            else:
+                print(f'  [FAIL] {repr(test_str)} matched {repr(actual)} but expected {repr(expected)}')
+                failed += 1
         else:
             print(f'  [FAIL] {repr(test_str)} should match but did not')
             failed += 1

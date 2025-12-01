@@ -196,14 +196,17 @@ class SessionManager:
             ValueError: If message size exceeds maximum allowed
         """
         # SECURITY: Validate message sizes to prevent resource exhaustion
-        if len(user_prompt) > MAX_MESSAGE_SIZE:
+        # Use encoded byte length for accurate size measurement
+        user_prompt_bytes = len(user_prompt.encode('utf-8'))
+        if user_prompt_bytes > MAX_MESSAGE_SIZE:
             raise ValueError(
-                f"User prompt too large: {len(user_prompt)} bytes "
+                f"User prompt too large: {user_prompt_bytes} bytes "
                 f"(maximum {MAX_MESSAGE_SIZE} bytes)"
             )
-        if len(assistant_response) > MAX_MESSAGE_SIZE:
+        assistant_response_bytes = len(assistant_response.encode('utf-8'))
+        if assistant_response_bytes > MAX_MESSAGE_SIZE:
             raise ValueError(
-                f"Assistant response too large: {len(assistant_response)} bytes "
+                f"Assistant response too large: {assistant_response_bytes} bytes "
                 f"(maximum {MAX_MESSAGE_SIZE} bytes)"
             )
 
