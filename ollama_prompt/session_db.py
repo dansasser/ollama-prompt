@@ -29,7 +29,20 @@ def get_default_db_path() -> Path:
         base = Path.home() / '.config'
 
     db_dir = base / 'ollama-prompt'
-    db_dir.mkdir(parents=True, exist_ok=True)
+
+    # SECURITY: Create directory with restrictive permissions (user-only access)
+    # On Unix/Linux/Mac: 0o700 (rwx------)
+    # On Windows: mkdir handles permissions via ACLs
+    db_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+
+    # On Unix systems, explicitly set permissions in case umask prevented proper mode
+    if os.name != 'nt' and db_dir.exists():
+        try:
+            os.chmod(db_dir, 0o700)
+        except (OSError, PermissionError):
+            # Best effort - may fail if not owner
+            pass
+
     return db_dir / 'sessions.db'
 
 
@@ -67,12 +80,21 @@ class SessionDatabase:
 
         Args:
             db_path: Custom database path. If None, uses default platform path.
+
+        Raises:
+            ValueError: If custom db_path is outside allowed directories
         """
         if db_path is None:
             # Check for environment variable override
             db_path = os.getenv('OLLAMA_PROMPT_DB_PATH')
             if db_path is None:
                 db_path = str(get_default_db_path())
+            else:
+                # SECURITY: Validate environment variable path
+                db_path = self._validate_db_path(db_path)
+        else:
+            # SECURITY: Validate explicitly provided path
+            db_path = self._validate_db_path(db_path)
 
         self.db_path = db_path
         self._ensure_schema()
@@ -94,11 +116,52 @@ class SessionDatabase:
         # This method exists for explicit cleanup if needed
         pass
 
+    def _validate_db_path(self, path: str) -> str:
+        """
+        Validate database path is in a safe location.
+
+        Args:
+            path: Database file path to validate
+
+        Returns:
+            str: Validated absolute path
+
+        Raises:
+            ValueError: If path is outside allowed directories
+        """
+        from pathlib import Path
+
+        try:
+            path_obj = Path(path).resolve()
+        except (OSError, RuntimeError) as e:
+            raise ValueError(f"Invalid database path: {path}") from e
+
+        # Path must be under user's home directory
+        home = Path.home()
+        try:
+            path_obj.relative_to(home)
+        except ValueError:
+            raise ValueError(
+                f"Database path must be under home directory. "
+                f"Path '{path}' is not under '{home}'"
+            )
+
+        return str(path_obj)
+
     def _ensure_schema(self):
         """Create database schema if it doesn't exist."""
         with self._get_connection() as conn:
             conn.executescript(self.SCHEMA)
             conn.commit()
+
+        # SECURITY: Set restrictive permissions on database file (user-only access)
+        # On Unix/Linux/Mac: 0o600 (rw-------)
+        if os.name != 'nt' and os.path.exists(self.db_path):
+            try:
+                os.chmod(self.db_path, 0o600)
+            except (OSError, PermissionError):
+                # Best effort - may fail if not owner
+                pass
 
     def create_session(self, session_data: Dict[str, Any]) -> str:
         """
@@ -166,6 +229,12 @@ class SessionDatabase:
 
             return dict(row)
 
+    # Whitelist of allowed column names for updates
+    ALLOWED_UPDATE_COLUMNS = {
+        'context', 'last_used', 'history_json',
+        'metadata_json', 'max_context_tokens', 'system_prompt'
+    }
+
     def update_session(self, session_id: str, updates: Dict[str, Any]):
         """
         Update session fields.
@@ -173,9 +242,17 @@ class SessionDatabase:
         Args:
             session_id: Session identifier
             updates: Dictionary of fields to update (e.g., {'context': '...', 'last_used': '...'})
+
+        Raises:
+            ValueError: If any update key is not in the whitelist of allowed columns
         """
         if not updates:
             return
+
+        # Validate all column names against whitelist (SECURITY: prevent SQL injection)
+        for key in updates.keys():
+            if key not in self.ALLOWED_UPDATE_COLUMNS:
+                raise ValueError(f"Invalid column name: {key}")
 
         # Build dynamic UPDATE query
         set_clauses = []
@@ -223,6 +300,9 @@ class SessionDatabase:
 
         Returns:
             List of session dictionaries
+
+        Raises:
+            ValueError: If limit is not a positive integer
         """
         query = """
             SELECT session_id, created_at, last_used,
@@ -231,12 +311,18 @@ class SessionDatabase:
             ORDER BY last_used DESC
         """
 
-        if limit:
-            query += f" LIMIT {limit}"
+        # Validate limit parameter (SECURITY: prevent SQL injection)
+        if limit is not None:
+            if not isinstance(limit, int) or limit <= 0:
+                raise ValueError(f"Invalid limit value: {limit}")
+            query += " LIMIT ?"
+            params = (limit,)
+        else:
+            params = ()
 
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(query)
+            cursor.execute(query, params)
             return [dict(row) for row in cursor.fetchall()]
 
     def purge_sessions(self, days: int) -> int:
