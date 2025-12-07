@@ -7,7 +7,8 @@ import re
 import sys
 
 # Import secure file reading (TOCTOU-safe, symlink-blocking)
-from .secure_file import read_file_secure, DEFAULT_MAX_FILE_BYTES
+# Now using llm-filesystem-tools package for production-ready security
+from llm_fs_tools import read_file_secure, DEFAULT_MAX_FILE_BYTES
 
 # Maximum prompt size to prevent ReDoS and resource exhaustion
 MAX_PROMPT_SIZE = 10_000_000  # 10MB

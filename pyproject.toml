@@ -7,7 +7,7 @@ authors = [
 ]
 readme = "README.md"
 requires-python = ">=3.7"
-dependencies = ["ollama"]
+dependencies = ["ollama", "llm-fs-tools>=0.1.0"]
 
 [project.optional-dependencies]
 mongodb = ["pymongo>=4.0.0"]
