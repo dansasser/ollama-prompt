@@ -5,6 +5,32 @@ All notable changes to ollama-prompt will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+#### Security: Migrated to llm-fs-tools Package
+- **Replaced local `secure_file.py`** with `llm-fs-tools` package dependency
+- All secure file operations now use production-ready, shared implementation
+- Benefits:
+  - TOCTOU-safe file reading with fd-based validation
+  - Cross-platform secure open (O_NOFOLLOW on Unix, GetFinalPathNameByHandle on Windows)
+  - Symlink blocking, device file rejection, path traversal prevention
+  - Shared security implementation between ollama-prompt and other projects
+
+### Removed
+- `ollama_prompt/secure_file.py` (418 lines) - replaced by llm-fs-tools
+
+### Dependencies
+- Added: `llm-fs-tools>=0.1.0`
+
+### Testing
+- Updated `tests/test_secure_file.py` to use llm-fs-tools imports
+- Skipped `TestHardlinkDetection` (check_hardlinks not in llm-fs-tools)
+- 50 tests passing, 7 skipped
+
+---
+
 ## [1.2.0] - 2025-10-31
 
 ### Added
