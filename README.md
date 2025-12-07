@@ -1,7 +1,7 @@
 # ollama-prompt
 
 [![PyPI version](https://badge.fury.io/py/ollama-prompt.svg)](https://badge.fury.io/py/ollama-prompt)
-[![Python 3.7+](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 [Quick Start](#quick-start) • [Documentation](docs/README.md) • [Use Cases](docs/guides/use-cases.md) • [Contributing](#contributing)
@@ -60,7 +60,7 @@ ollama-prompt --prompt "Analyze @./src/auth.py for security issues" \
 - **Secure File Access** - TOCTOU-safe operations via [llm-fs-tools](https://github.com/dansasser/llm-filesystem-tools)
 - **Subprocess-Friendly** - Designed for agent orchestration and automation
 - **Cloud & Local Models** - Works with both Ollama cloud models and local instances
-- **Cross-Platform** - Windows, macOS, Linux with Python 3.7+
+- **Cross-Platform** - Windows, macOS, Linux with Python 3.10+
 
 ---
 
@@ -100,7 +100,7 @@ pip install -e .
 ```
 
 ### Prerequisites
-- Python 3.7 or higher
+- Python 3.10 or higher
 - [Ollama](https://ollama.com) installed and running
 - For cloud models: `ollama signin` (one-time authentication)
 
