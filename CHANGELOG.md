@@ -31,11 +31,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Symlink blocking, device file rejection, path traversal prevention
   - Shared security implementation between ollama-prompt and other projects
 
+### Breaking Changes
+
+#### Python 3.10+ Required
+- **Minimum Python version raised from 3.7 to 3.10**
+- Reason: The new `llm-fs-tools` dependency requires Python 3.10+
+- Users on Python 3.7-3.9 must upgrade Python to use ollama-prompt v1.2.0+
+
 ### Removed
 - `ollama_prompt/secure_file.py` (418 lines) - replaced by llm-fs-tools
 
 ### Dependencies
-- Added: `llm-fs-tools>=0.1.0`
+- Added: `llm-fs-tools>=0.1.0` (requires Python 3.10+)
 
 ### Testing
 - Updated `tests/test_secure_file.py` to use llm-fs-tools imports

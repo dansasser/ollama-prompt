@@ -148,7 +148,7 @@ class TestExpandFileRefsWithDirectories:
         subdir.mkdir()
         (subdir / "file.py").write_text("code", encoding="utf-8")
 
-        prompt = f"List this: @./mydir/"
+        prompt = "List this: @./mydir/"
         result = expand_file_refs_in_prompt(prompt, repo_root=str(tmp_path))
 
         assert "DIRECTORY:" in result
@@ -160,7 +160,7 @@ class TestExpandFileRefsWithDirectories:
         subdir.mkdir()
         (subdir / "main.py").write_text("code", encoding="utf-8")
 
-        prompt = f"Show: @./src/:list"
+        prompt = "Show: @./src/:list"
         result = expand_file_refs_in_prompt(prompt, repo_root=str(tmp_path))
 
         assert "DIRECTORY:" in result
@@ -175,7 +175,7 @@ class TestExpandFileRefsWithDirectories:
         nested.mkdir()
         (nested / "utils.py").write_text("utils", encoding="utf-8")
 
-        prompt = f"Tree: @./project/:tree"
+        prompt = "Tree: @./project/:tree"
         result = expand_file_refs_in_prompt(prompt, repo_root=str(tmp_path))
 
         assert "TREE:" in result
@@ -187,7 +187,7 @@ class TestExpandFileRefsWithDirectories:
         subdir.mkdir()
         (subdir / "file.py").write_text("def my_function():\n    pass", encoding="utf-8")
 
-        prompt = f"Find: @./code/:search:my_function"
+        prompt = "Find: @./code/:search:my_function"
         result = expand_file_refs_in_prompt(prompt, repo_root=str(tmp_path))
 
         assert "SEARCH:" in result
@@ -198,19 +198,18 @@ class TestExpandFileRefsWithDirectories:
         subdir = tmp_path / "code"
         subdir.mkdir()
 
-        # Note: This won't match because :search: without pattern
-        # The regex needs a pattern after :search:
-        prompt = f"Find: @./code/:search:"
+        # :search: without a pattern should show an error
+        prompt = "Find: @./code/:search:"
         result = expand_file_refs_in_prompt(prompt, repo_root=str(tmp_path))
 
-        # The pattern won't match properly without text after :search:
-        # so it will either error or not expand at all
+        # Should surface a clear error when :search: has no pattern
+        assert "ERROR: :search requires a pattern" in result
 
     def test_file_still_works(self, tmp_path):
         """Test regular file reference still works."""
         (tmp_path / "readme.md").write_text("# Hello", encoding="utf-8")
 
-        prompt = f"Read: @./readme.md"
+        prompt = "Read: @./readme.md"
         result = expand_file_refs_in_prompt(prompt, repo_root=str(tmp_path))
 
         assert "FILE:" in result
@@ -223,7 +222,7 @@ class TestExpandFileRefsWithDirectories:
         subdir.mkdir()
         (subdir / "app.py").write_text("print('app')", encoding="utf-8")
 
-        prompt = f"Config: @./config.json and source: @./src/"
+        prompt = "Config: @./config.json and source: @./src/"
         result = expand_file_refs_in_prompt(prompt, repo_root=str(tmp_path))
 
         assert "FILE: ./config.json" in result
