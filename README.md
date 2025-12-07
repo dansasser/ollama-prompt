@@ -56,6 +56,8 @@ ollama-prompt --prompt "Analyze @./src/auth.py for security issues" \
 - **Session Management** - Persistent conversations across CLI invocations
 - **Rich Metadata** - Full JSON output with token counts, timing, and cost tracking
 - **File References** - Reference local files with `@./path/to/file.py` syntax
+- **Directory Operations** - List, tree view, and search with `@./dir/` syntax
+- **Secure File Access** - TOCTOU-safe operations via [llm-fs-tools](https://github.com/dansasser/llm-filesystem-tools)
 - **Subprocess-Friendly** - Designed for agent orchestration and automation
 - **Cloud & Local Models** - Works with both Ollama cloud models and local instances
 - **Cross-Platform** - Windows, macOS, Linux with Python 3.7+
@@ -134,6 +136,29 @@ ollama-prompt --session-id $SESSION_ID --prompt "When was he born?"
 ```bash
 ollama-prompt --prompt "Review @./src/auth.py for security issues"
 ```
+
+### Directory Operations
+
+Reference entire directories with the `@./dir/` syntax:
+
+```bash
+# List directory contents
+ollama-prompt --prompt "What's in @./src/?"
+
+# Show directory tree
+ollama-prompt --prompt "Show the structure: @./src/:tree"
+
+# Search for pattern in files
+ollama-prompt --prompt "Find TODO comments: @./src/:search:TODO"
+```
+
+**Directory Syntax:**
+| Syntax | Description | Example |
+|--------|-------------|---------|
+| `@./dir/` | List directory contents | `@./src/` |
+| `@./dir/:list` | Explicit list operation | `@./src/:list` |
+| `@./dir/:tree` | Directory tree (depth=3) | `@./src/:tree` |
+| `@./dir/:search:PATTERN` | Search for pattern | `@./src/:search:TODO` |
 
 ### Stateless Mode
 ```bash
