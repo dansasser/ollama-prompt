@@ -8,7 +8,7 @@ import sys
 
 # Import secure file reading (TOCTOU-safe, symlink-blocking)
 # Now using llm-filesystem-tools package for production-ready security
-from llm_fs_tools import read_file_secure, DEFAULT_MAX_FILE_BYTES
+from llm_fs_tools import read_file_secure, create_directory_tools, DEFAULT_MAX_FILE_BYTES
 
 # Maximum prompt size to prevent ReDoS and resource exhaustion
 MAX_PROMPT_SIZE = 10_000_000  # 10MB
@@ -84,15 +84,171 @@ def read_file_snippet(path, repo_root=".", max_bytes=DEFAULT_MAX_FILE_BYTES):
     """
     return read_file_secure(path, repo_root, max_bytes, audit=True)
 
+
+def list_directory(path, repo_root="."):
+    """
+    List directory contents securely.
+
+    Args:
+        path: Directory path to list (relative to repo_root)
+        repo_root: Repository root for security validation
+
+    Returns:
+        Dict with ok, path, content (formatted listing) or error
+    """
+    try:
+        # Resolve path relative to repo_root
+        abs_repo = os.path.abspath(repo_root)
+        if path in (".", "./", ".\\"):
+            target_dir = abs_repo
+        else:
+            # Strip leading ./ or .\
+            clean_path = path.lstrip("./").lstrip(".\\")
+            target_dir = os.path.join(abs_repo, clean_path)
+
+        tools = create_directory_tools(abs_repo)
+        result = tools.list_directory(target_dir)
+
+        if result["success"]:
+            entries = result["data"]["entries"]
+            # Format as readable listing
+            lines = []
+            for entry in sorted(entries, key=lambda e: (e["type"] != "directory", e["name"])):
+                if entry["type"] == "directory":
+                    lines.append(f"  [DIR]  {entry['name']}/")
+                else:
+                    size = entry.get("size", 0)
+                    lines.append(f"  [FILE] {entry['name']} ({size} bytes)")
+
+            content = f"Directory: {path}\n" + "\n".join(lines) if lines else f"Directory: {path}\n  (empty)"
+            return {"ok": True, "path": path, "content": content}
+        else:
+            return {"ok": False, "path": path, "error": result.get("error", "Unknown error")}
+    except Exception as e:
+        return {"ok": False, "path": path, "error": str(e)}
+
+
+def get_directory_tree(path, repo_root=".", max_depth=3):
+    """
+    Get hierarchical directory tree securely.
+
+    Args:
+        path: Directory path for tree root (relative to repo_root)
+        repo_root: Repository root for security validation
+        max_depth: Maximum recursion depth
+
+    Returns:
+        Dict with ok, path, content (formatted tree) or error
+    """
+    try:
+        # Resolve path relative to repo_root
+        abs_repo = os.path.abspath(repo_root)
+        if path in (".", "./", ".\\"):
+            target_dir = abs_repo
+        else:
+            clean_path = path.lstrip("./").lstrip(".\\")
+            target_dir = os.path.join(abs_repo, clean_path)
+
+        tools = create_directory_tools(abs_repo)
+        result = tools.get_directory_tree(target_dir, max_depth=max_depth)
+
+        if result["success"]:
+            # Format tree recursively
+            def format_tree(node, prefix="", is_last=True):
+                lines = []
+                connector = "`-- " if is_last else "|-- "
+                name = node["name"]
+                if node["type"] == "directory":
+                    name += "/"
+
+                lines.append(f"{prefix}{connector}{name}")
+
+                if "children" in node and node["children"]:
+                    children = sorted(node["children"], key=lambda c: (c["type"] != "directory", c["name"]))
+                    for i, child in enumerate(children):
+                        is_child_last = (i == len(children) - 1)
+                        extension = "    " if is_last else "|   "
+                        lines.extend(format_tree(child, prefix + extension, is_child_last))
+
+                return lines
+
+            tree_data = result["data"]
+            tree_lines = [f"{tree_data['name']}/"]
+            if "children" in tree_data and tree_data["children"]:
+                children = sorted(tree_data["children"], key=lambda c: (c["type"] != "directory", c["name"]))
+                for i, child in enumerate(children):
+                    is_last = (i == len(children) - 1)
+                    tree_lines.extend(format_tree(child, "", is_last))
+
+            content = "\n".join(tree_lines)
+            return {"ok": True, "path": path, "content": content}
+        else:
+            return {"ok": False, "path": path, "error": result.get("error", "Unknown error")}
+    except Exception as e:
+        return {"ok": False, "path": path, "error": str(e)}
+
+
+def search_directory(path, pattern, repo_root=".", max_results=50):
+    """
+    Search for pattern in files within directory.
+
+    Args:
+        path: Directory path to search in (relative to repo_root)
+        pattern: Regex pattern to search for
+        repo_root: Repository root for security validation
+        max_results: Maximum number of results
+
+    Returns:
+        Dict with ok, path, content (formatted results) or error
+    """
+    try:
+        # Resolve path relative to repo_root
+        abs_repo = os.path.abspath(repo_root)
+        if path in (".", "./", ".\\"):
+            target_dir = abs_repo
+        else:
+            clean_path = path.lstrip("./").lstrip(".\\")
+            target_dir = os.path.join(abs_repo, clean_path)
+
+        tools = create_directory_tools(abs_repo)
+        result = tools.search_codebase(pattern, target_dir, max_results=max_results)
+
+        if result["success"]:
+            matches = result["data"]["matches"]
+            if not matches:
+                content = f"Search: '{pattern}' in {path}\n  No matches found."
+            else:
+                lines = [f"Search: '{pattern}' in {path} ({len(matches)} matches)"]
+                for match in matches:
+                    file_path = match.get("file", "unknown")
+                    line_num = match.get("line", "?")
+                    line_text = match.get("content", "").strip()
+                    lines.append(f"  {file_path}:{line_num}: {line_text}")
+                content = "\n".join(lines)
+
+            return {"ok": True, "path": path, "content": content}
+        else:
+            return {"ok": False, "path": path, "error": result.get("error", "Unknown error")}
+    except Exception as e:
+        return {"ok": False, "path": path, "error": str(e)}
+
 def expand_file_refs_in_prompt(prompt, repo_root=".", max_bytes=DEFAULT_MAX_FILE_BYTES):
     """
-    Find file-reference tokens in the prompt of the form @<path> and replace them
-    with the file contents (bounded) wrapped in clear delimiters.
+    Find file/directory reference tokens in the prompt and replace them
+    with contents wrapped in clear delimiters.
+
+    File syntax:
+    - @./path/to/file.py - Read file contents
+    - @src/foo.py - Read file contents
+
+    Directory syntax:
+    - @./dir/ or @./dir/:list - List directory contents
+    - @./dir/:tree - Show directory tree (depth=3)
+    - @./dir/:search:PATTERN - Search for pattern in directory
 
     Rules:
-    - Token syntax: @<path-without-spaces>, e.g. @./README.md, @src/foo.py, @/absolute/path.md
     - If reading fails, an error note is inserted instead of silently dropping it.
-    - Avoid replacing email-like @user tokens by requiring a path-like string (contains '/' or starts with ./ ../ or /).
+    - Avoid replacing email-like @user tokens by requiring a path-like string.
 
     Raises:
         ValueError: If prompt exceeds maximum allowed size
@@ -101,21 +257,55 @@ def expand_file_refs_in_prompt(prompt, repo_root=".", max_bytes=DEFAULT_MAX_FILE
     if len(prompt) > MAX_PROMPT_SIZE:
         raise ValueError(f"Prompt too large: {len(prompt)} bytes (maximum {MAX_PROMPT_SIZE} bytes)")
 
-    # Simplified regex pattern to reduce backtracking risk
-    # Matches: @./ or @../ or @/ (or backslash equivalents) followed by valid path characters
+    # Pattern matches: @./ or @../ or @/ followed by valid path characters
+    # Now also captures optional :command:arg suffixes for directory operations
     # Excludes: whitespace, @, and common sentence-ending punctuation (?!,;)
     pattern = re.compile(r'@((?:\.\.?[/\\]|[/\\])[^\s@?!,;]+)')
 
     def _repl(m):
-        path = m.group(1)
-        res = read_file_snippet(path, repo_root=repo_root, max_bytes=max_bytes)
+        full_ref = m.group(1)
+
+        # Check for directory operation syntax: path/:command or path/:command:arg
+        # First, handle :search:pattern (must check before :tree/:list)
+        if ':search:' in full_ref:
+            parts = full_ref.split(':search:', 1)
+            dir_path = parts[0].rstrip('/\\')
+            search_pattern = parts[1] if len(parts) > 1 else ""
+            if not search_pattern:
+                return f"\n\n--- DIRECTORY: {dir_path} (ERROR: :search requires a pattern) ---\n"
+            res = search_directory(dir_path, search_pattern, repo_root=repo_root)
+            label = f"SEARCH: '{search_pattern}' in {dir_path}"
+
+        elif full_ref.endswith(':tree'):
+            dir_path = full_ref[:-5].rstrip('/\\')  # Remove :tree
+            res = get_directory_tree(dir_path, repo_root=repo_root)
+            label = f"TREE: {dir_path}"
+
+        elif full_ref.endswith(':list'):
+            dir_path = full_ref[:-5].rstrip('/\\')  # Remove :list
+            res = list_directory(dir_path, repo_root=repo_root)
+            label = f"DIRECTORY: {dir_path}"
+
+        elif full_ref.endswith('/') or full_ref.endswith('\\'):
+            # Trailing slash = directory listing
+            dir_path = full_ref.rstrip('/\\')
+            res = list_directory(dir_path, repo_root=repo_root)
+            label = f"DIRECTORY: {dir_path}"
+
+        else:
+            # Regular file reference
+            path = full_ref
+            res = read_file_snippet(path, repo_root=repo_root, max_bytes=max_bytes)
+            label = f"FILE: {path}"
+
         if not res["ok"]:
-            return f"\n\n--- FILE: {path} (ERROR: {res['error']}) ---\n"
-        # Wrap with explicit markers so model can clearly see file boundaries.
+            return f"\n\n--- {label} (ERROR: {res['error']}) ---\n"
+
+        # Wrap with explicit markers so model can clearly see boundaries
         return (
-            f"\n\n--- FILE: {path} START ---\n"
+            f"\n\n--- {label} START ---\n"
             f"{res['content']}\n"
-            f"--- FILE: {path} END ---\n\n"
+            f"--- {label} END ---\n\n"
         )
 
     expanded = pattern.sub(_repl, prompt)

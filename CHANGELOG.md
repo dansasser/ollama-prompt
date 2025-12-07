@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+#### Directory Syntax for File References
+- **New directory operations** using `@` syntax in prompts:
+  - `@./dir/` or `@./dir/:list` - List directory contents
+  - `@./dir/:tree` - Show directory tree (depth=3)
+  - `@./dir/:search:PATTERN` - Search for pattern in files
+- Directory listings show `[DIR]` and `[FILE]` markers with sizes
+- Tree view uses ASCII art for hierarchical display
+- Search shows file:line:content for each match
+- All operations use secure llm-fs-tools backend
+- 17 new tests for directory syntax
+
 ### Changed
 
 #### Security: Migrated to llm-fs-tools Package
@@ -27,7 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Testing
 - Updated `tests/test_secure_file.py` to use llm-fs-tools imports
 - Skipped `TestHardlinkDetection` (check_hardlinks not in llm-fs-tools)
-- 50 tests passing, 7 skipped
+- Added `tests/test_directory_syntax.py` with 17 tests
+- 67 tests passing, 7 skipped
 
 ---
 
