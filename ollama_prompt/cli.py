@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
-import ollama
 import argparse
 import json
 import os
 import re
 import sys
 
+import ollama
 # Import secure file reading (TOCTOU-safe, symlink-blocking)
 # Now using llm-filesystem-tools package for production-ready security
-from llm_fs_tools import read_file_secure, create_directory_tools, DEFAULT_MAX_FILE_BYTES
+from llm_fs_tools import (DEFAULT_MAX_FILE_BYTES, create_directory_tools,
+                          read_file_secure)
 
 # Maximum prompt size to prevent ReDoS and resource exhaustion
 MAX_PROMPT_SIZE = 10_000_000  # 10MB
+
 
 def validate_model_name(model: str) -> str:
     """
@@ -31,7 +33,7 @@ def validate_model_name(model: str) -> str:
 
     # SECURITY: Allow only safe characters for model names
     # Format: alphanumeric, dots, hyphens, underscores, colons (for tags)
-    if not re.match(r'^[a-zA-Z0-9._:-]+$', model):
+    if not re.match(r"^[a-zA-Z0-9._:-]+$", model):
         raise ValueError(
             f"Invalid model name format: '{model}'. "
             "Only alphanumeric characters, dots, hyphens, underscores, and colons are allowed."
@@ -40,9 +42,12 @@ def validate_model_name(model: str) -> str:
     # Prevent excessively long model names
     MAX_MODEL_NAME_LENGTH = 100
     if len(model) > MAX_MODEL_NAME_LENGTH:
-        raise ValueError(f"Model name too long: {len(model)} characters (maximum {MAX_MODEL_NAME_LENGTH})")
+        raise ValueError(
+            f"Model name too long: {len(model)} characters (maximum {MAX_MODEL_NAME_LENGTH})"
+        )
 
     return model
+
 
 def safe_join_repo(repo_root, path):
     """Join path to repo_root and prevent path traversal outside repo_root."""
@@ -58,7 +63,7 @@ def safe_join_repo(repo_root, path):
         target_resolved = os.path.realpath(target)
 
         # On Windows, normalize case for comparison
-        if os.name == 'nt':
+        if os.name == "nt":
             repo_root_resolved = os.path.normcase(repo_root_resolved)
             target_resolved = os.path.normcase(target_resolved)
 
@@ -71,6 +76,7 @@ def safe_join_repo(repo_root, path):
         raise ValueError(f"path outside repo root: {path}") from e
 
     return target
+
 
 def read_file_snippet(path, repo_root=".", max_bytes=DEFAULT_MAX_FILE_BYTES):
     """
@@ -113,17 +119,27 @@ def list_directory(path, repo_root="."):
             entries = result["data"]["entries"]
             # Format as readable listing
             lines = []
-            for entry in sorted(entries, key=lambda e: (e["type"] != "directory", e["name"])):
+            for entry in sorted(
+                entries, key=lambda e: (e["type"] != "directory", e["name"])
+            ):
                 if entry["type"] == "directory":
                     lines.append(f"  [DIR]  {entry['name']}/")
                 else:
                     size = entry.get("size", 0)
                     lines.append(f"  [FILE] {entry['name']} ({size} bytes)")
 
-            content = f"Directory: {path}\n" + "\n".join(lines) if lines else f"Directory: {path}\n  (empty)"
+            content = (
+                f"Directory: {path}\n" + "\n".join(lines)
+                if lines
+                else f"Directory: {path}\n  (empty)"
+            )
             return {"ok": True, "path": path, "content": content}
         else:
-            return {"ok": False, "path": path, "error": result.get("error", "Unknown error")}
+            return {
+                "ok": False,
+                "path": path,
+                "error": result.get("error", "Unknown error"),
+            }
     except Exception as e:
         return {"ok": False, "path": path, "error": str(e)}
 
@@ -164,26 +180,38 @@ def get_directory_tree(path, repo_root=".", max_depth=3):
                 lines.append(f"{prefix}{connector}{name}")
 
                 if "children" in node and node["children"]:
-                    children = sorted(node["children"], key=lambda c: (c["type"] != "directory", c["name"]))
+                    children = sorted(
+                        node["children"],
+                        key=lambda c: (c["type"] != "directory", c["name"]),
+                    )
                     for i, child in enumerate(children):
-                        is_child_last = (i == len(children) - 1)
+                        is_child_last = i == len(children) - 1
                         extension = "    " if is_last else "|   "
-                        lines.extend(format_tree(child, prefix + extension, is_child_last))
+                        lines.extend(
+                            format_tree(child, prefix + extension, is_child_last)
+                        )
 
                 return lines
 
             tree_data = result["data"]
             tree_lines = [f"{tree_data['name']}/"]
             if "children" in tree_data and tree_data["children"]:
-                children = sorted(tree_data["children"], key=lambda c: (c["type"] != "directory", c["name"]))
+                children = sorted(
+                    tree_data["children"],
+                    key=lambda c: (c["type"] != "directory", c["name"]),
+                )
                 for i, child in enumerate(children):
-                    is_last = (i == len(children) - 1)
+                    is_last = i == len(children) - 1
                     tree_lines.extend(format_tree(child, "", is_last))
 
             content = "\n".join(tree_lines)
             return {"ok": True, "path": path, "content": content}
         else:
-            return {"ok": False, "path": path, "error": result.get("error", "Unknown error")}
+            return {
+                "ok": False,
+                "path": path,
+                "error": result.get("error", "Unknown error"),
+            }
     except Exception as e:
         return {"ok": False, "path": path, "error": str(e)}
 
@@ -228,9 +256,14 @@ def search_directory(path, pattern, repo_root=".", max_results=50):
 
             return {"ok": True, "path": path, "content": content}
         else:
-            return {"ok": False, "path": path, "error": result.get("error", "Unknown error")}
+            return {
+                "ok": False,
+                "path": path,
+                "error": result.get("error", "Unknown error"),
+            }
     except Exception as e:
         return {"ok": False, "path": path, "error": str(e)}
+
 
 def expand_file_refs_in_prompt(prompt, repo_root=".", max_bytes=DEFAULT_MAX_FILE_BYTES):
     """
@@ -255,40 +288,42 @@ def expand_file_refs_in_prompt(prompt, repo_root=".", max_bytes=DEFAULT_MAX_FILE
     """
     # SECURITY: Prevent ReDoS and resource exhaustion with size limit
     if len(prompt) > MAX_PROMPT_SIZE:
-        raise ValueError(f"Prompt too large: {len(prompt)} bytes (maximum {MAX_PROMPT_SIZE} bytes)")
+        raise ValueError(
+            f"Prompt too large: {len(prompt)} bytes (maximum {MAX_PROMPT_SIZE} bytes)"
+        )
 
     # Pattern matches: @./ or @../ or @/ followed by valid path characters
     # Now also captures optional :command:arg suffixes for directory operations
     # Excludes: whitespace, @, and common sentence-ending punctuation (?!,;)
-    pattern = re.compile(r'@((?:\.\.?[/\\]|[/\\])[^\s@?!,;]+)')
+    pattern = re.compile(r"@((?:\.\.?[/\\]|[/\\])[^\s@?!,;]+)")
 
     def _repl(m):
         full_ref = m.group(1)
 
         # Check for directory operation syntax: path/:command or path/:command:arg
         # First, handle :search:pattern (must check before :tree/:list)
-        if ':search:' in full_ref:
-            parts = full_ref.split(':search:', 1)
-            dir_path = parts[0].rstrip('/\\')
+        if ":search:" in full_ref:
+            parts = full_ref.split(":search:", 1)
+            dir_path = parts[0].rstrip("/\\")
             search_pattern = parts[1] if len(parts) > 1 else ""
             if not search_pattern:
                 return f"\n\n--- DIRECTORY: {dir_path} (ERROR: :search requires a pattern) ---\n"
             res = search_directory(dir_path, search_pattern, repo_root=repo_root)
             label = f"SEARCH: '{search_pattern}' in {dir_path}"
 
-        elif full_ref.endswith(':tree'):
-            dir_path = full_ref[:-5].rstrip('/\\')  # Remove :tree
+        elif full_ref.endswith(":tree"):
+            dir_path = full_ref[:-5].rstrip("/\\")  # Remove :tree
             res = get_directory_tree(dir_path, repo_root=repo_root)
             label = f"TREE: {dir_path}"
 
-        elif full_ref.endswith(':list'):
-            dir_path = full_ref[:-5].rstrip('/\\')  # Remove :list
+        elif full_ref.endswith(":list"):
+            dir_path = full_ref[:-5].rstrip("/\\")  # Remove :list
             res = list_directory(dir_path, repo_root=repo_root)
             label = f"DIRECTORY: {dir_path}"
 
-        elif full_ref.endswith('/') or full_ref.endswith('\\'):
+        elif full_ref.endswith("/") or full_ref.endswith("\\"):
             # Trailing slash = directory listing
-            dir_path = full_ref.rstrip('/\\')
+            dir_path = full_ref.rstrip("/\\")
             res = list_directory(dir_path, repo_root=repo_root)
             label = f"DIRECTORY: {dir_path}"
 
@@ -311,27 +346,76 @@ def expand_file_refs_in_prompt(prompt, repo_root=".", max_bytes=DEFAULT_MAX_FILE
     expanded = pattern.sub(_repl, prompt)
     return expanded
 
+
 def main():
-    parser = argparse.ArgumentParser(description="Send a prompt to local Ollama and get full verbose JSON response (just like PowerShell). Supports file refs like @./this-file.md which are inlined from the local repo before sending to the model.")
-    parser.add_argument('--prompt', help="Prompt to send to the model. Use @path tokens to inline files (e.g. '@./README.md Explain this file'). Not required for utility commands.")
-    parser.add_argument('--model', default="deepseek-v3.1:671b-cloud", help="Model name")
-    parser.add_argument('--temperature', type=float, default=0.1, help="Sampling temperature")
-    parser.add_argument('--max_tokens', type=int, default=2048, help="Max tokens for response")
-    parser.add_argument('--repo-root', default='.', help="Repository root used to resolve @file references (default: current directory).")
-    parser.add_argument('--max-file-bytes', type=int, default=DEFAULT_MAX_FILE_BYTES, help="Max bytes to read from each referenced file to avoid excessive prompts.")
-    parser.add_argument('--think', action='store_true', help='Enable thinking mode for supported models')
+    parser = argparse.ArgumentParser(
+        description="Send a prompt to local Ollama and get full verbose JSON response (just like PowerShell). Supports file refs like @./this-file.md which are inlined from the local repo before sending to the model."
+    )
+    parser.add_argument(
+        "--prompt",
+        help="Prompt to send to the model. Use @path tokens to inline files (e.g. '@./README.md Explain this file'). Not required for utility commands.",
+    )
+    parser.add_argument(
+        "--model", default="deepseek-v3.1:671b-cloud", help="Model name"
+    )
+    parser.add_argument(
+        "--temperature", type=float, default=0.1, help="Sampling temperature"
+    )
+    parser.add_argument(
+        "--max_tokens", type=int, default=2048, help="Max tokens for response"
+    )
+    parser.add_argument(
+        "--repo-root",
+        default=".",
+        help="Repository root used to resolve @file references (default: current directory).",
+    )
+    parser.add_argument(
+        "--max-file-bytes",
+        type=int,
+        default=DEFAULT_MAX_FILE_BYTES,
+        help="Max bytes to read from each referenced file to avoid excessive prompts.",
+    )
+    parser.add_argument(
+        "--think", action="store_true", help="Enable thinking mode for supported models"
+    )
 
     # Session management flags
-    session_group = parser.add_argument_group('session management', 'Manage conversation context across multiple prompts')
-    session_group.add_argument('--session-id', type=str, help='Continue existing session by ID')
-    session_group.add_argument('--no-session', action='store_true', help='Run in stateless mode (no session stored)')
-    session_group.add_argument('--max-context-tokens', type=int, help='Override max context tokens for this session (default: 64000)')
+    session_group = parser.add_argument_group(
+        "session management", "Manage conversation context across multiple prompts"
+    )
+    session_group.add_argument(
+        "--session-id", type=str, help="Continue existing session by ID"
+    )
+    session_group.add_argument(
+        "--no-session",
+        action="store_true",
+        help="Run in stateless mode (no session stored)",
+    )
+    session_group.add_argument(
+        "--max-context-tokens",
+        type=int,
+        help="Override max context tokens for this session (default: 64000)",
+    )
 
     # Utility command flags
-    utility_group = parser.add_argument_group('session utilities', 'Manage stored sessions')
-    utility_group.add_argument('--list-sessions', action='store_true', help='List all stored sessions and exit')
-    utility_group.add_argument('--purge', type=int, metavar='DAYS', help='Remove sessions older than DAYS and exit')
-    utility_group.add_argument('--session-info', type=str, metavar='ID', help='Show details for session ID and exit')
+    utility_group = parser.add_argument_group(
+        "session utilities", "Manage stored sessions"
+    )
+    utility_group.add_argument(
+        "--list-sessions", action="store_true", help="List all stored sessions and exit"
+    )
+    utility_group.add_argument(
+        "--purge",
+        type=int,
+        metavar="DAYS",
+        help="Remove sessions older than DAYS and exit",
+    )
+    utility_group.add_argument(
+        "--session-info",
+        type=str,
+        metavar="ID",
+        help="Show details for session ID and exit",
+    )
 
     args = parser.parse_args()
 
@@ -348,6 +432,7 @@ def main():
             args.prompt = None
         # Route to utility command handler
         from .session_utils import handle_utility_command
+
         handle_utility_command(args)
         return
 
@@ -363,9 +448,13 @@ def main():
 
     # Expand file references like @./path/to/file before calling the model.
     try:
-        prompt_with_files = expand_file_refs_in_prompt(args.prompt, repo_root=args.repo_root, max_bytes=args.max_file_bytes)
+        prompt_with_files = expand_file_refs_in_prompt(
+            args.prompt, repo_root=args.repo_root, max_bytes=args.max_file_bytes
+        )
     except Exception as e:
-        print(json.dumps({"error": f"failed to expand file refs: {e}"}), file=sys.stderr)
+        print(
+            json.dumps({"error": f"failed to expand file refs: {e}"}), file=sys.stderr
+        )
         sys.exit(1)
 
     # Session management
@@ -373,6 +462,7 @@ def main():
     session_manager = None
     if not args.no_session:
         from .session_manager import SessionManager
+
         session_manager = SessionManager()
 
         try:
@@ -380,13 +470,18 @@ def main():
             session, is_new = session_manager.get_or_create_session(
                 session_id=args.session_id,
                 model_name=args.model,
-                max_context_tokens=args.max_context_tokens
+                max_context_tokens=args.max_context_tokens,
             )
 
             # Prepare prompt with session context
-            prompt_with_context = session_manager.prepare_prompt(session, prompt_with_files)
+            prompt_with_context = session_manager.prepare_prompt(
+                session, prompt_with_files
+            )
         except Exception as e:
-            print(json.dumps({"error": f"session management failed: {e}"}), file=sys.stderr)
+            print(
+                json.dumps({"error": f"session management failed: {e}"}),
+                file=sys.stderr,
+            )
             if session_manager:
                 session_manager.close()
             sys.exit(1)
@@ -394,31 +489,25 @@ def main():
         # Stateless mode - no session
         prompt_with_context = prompt_with_files
 
-    options = {
-        "temperature": args.temperature,
-        "num_predict": args.max_tokens
-    }
+    options = {"temperature": args.temperature, "num_predict": args.max_tokens}
 
     if args.think:
-        options['think'] = True
+        options["think"] = True
 
     result = ollama.generate(
-        model=args.model,
-        prompt=prompt_with_context,
-        options=options,
-        stream=False
+        model=args.model, prompt=prompt_with_context, options=options, stream=False
     )
 
     # Update session after response
     if session_manager and session:
         try:
             session_manager.update_session(
-                session,
-                prompt_with_files,
-                result['response']
+                session, prompt_with_files, result["response"]
             )
         except Exception as e:
-            print(json.dumps({"error": f"failed to update session: {e}"}), file=sys.stderr)
+            print(
+                json.dumps({"error": f"failed to update session: {e}"}), file=sys.stderr
+            )
         finally:
             session_manager.close()
 
@@ -427,7 +516,7 @@ def main():
 
     # Add session_id to output if session was used
     if session:
-        result_dict['session_id'] = session['session_id']
+        result_dict["session_id"] = session["session_id"]
 
     print(json.dumps(result_dict, indent=2))
 

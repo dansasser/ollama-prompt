@@ -6,10 +6,9 @@ Supports SQLite (default) and MongoDB (optional) backends.
 
 import os
 import sqlite3
-from pathlib import Path
-from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
-import json
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 
 def get_default_db_path() -> Path:
@@ -23,12 +22,12 @@ def get_default_db_path() -> Path:
         - Windows: %APPDATA%\\ollama-prompt\\sessions.db
         - Unix/Linux/Mac: ~/.config/ollama-prompt/sessions.db
     """
-    if os.name == 'nt':  # Windows
-        base = Path(os.getenv('APPDATA', Path.home()))
+    if os.name == "nt":  # Windows
+        base = Path(os.getenv("APPDATA", Path.home()))
     else:  # Unix/Linux/Mac
-        base = Path.home() / '.config'
+        base = Path.home() / ".config"
 
-    db_dir = base / 'ollama-prompt'
+    db_dir = base / "ollama-prompt"
 
     # SECURITY: Create directory with restrictive permissions (user-only access)
     # On Unix/Linux/Mac: 0o700 (rwx------)
@@ -36,14 +35,14 @@ def get_default_db_path() -> Path:
     db_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
 
     # On Unix systems, explicitly set permissions in case umask prevented proper mode
-    if os.name != 'nt' and db_dir.exists():
+    if os.name != "nt" and db_dir.exists():
         try:
             os.chmod(db_dir, 0o700)
         except (OSError, PermissionError):
             # Best effort - may fail if not owner
             pass
 
-    return db_dir / 'sessions.db'
+    return db_dir / "sessions.db"
 
 
 class SessionDatabase:
@@ -86,7 +85,7 @@ class SessionDatabase:
         """
         if db_path is None:
             # Check for environment variable override
-            db_path = os.getenv('OLLAMA_PROMPT_DB_PATH')
+            db_path = os.getenv("OLLAMA_PROMPT_DB_PATH")
             if db_path is None:
                 db_path = str(get_default_db_path())
             else:
@@ -156,7 +155,7 @@ class SessionDatabase:
 
         # SECURITY: Set restrictive permissions on database file (user-only access)
         # On Unix/Linux/Mac: 0o600 (rw-------)
-        if os.name != 'nt' and os.path.exists(self.db_path):
+        if os.name != "nt" and os.path.exists(self.db_path):
             try:
                 os.chmod(self.db_path, 0o600)
             except (OSError, PermissionError):
@@ -182,26 +181,29 @@ class SessionDatabase:
         """
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO sessions (
                     session_id, context, created_at, last_used,
                     max_context_tokens, history_json, metadata_json,
                     model_name, system_prompt
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                session_data['session_id'],
-                session_data.get('context', ''),
-                session_data.get('created_at', datetime.now().isoformat()),
-                session_data.get('last_used', datetime.now().isoformat()),
-                session_data.get('max_context_tokens', 64000),
-                session_data.get('history_json'),
-                session_data.get('metadata_json'),
-                session_data.get('model_name'),
-                session_data.get('system_prompt')
-            ))
+            """,
+                (
+                    session_data["session_id"],
+                    session_data.get("context", ""),
+                    session_data.get("created_at", datetime.now().isoformat()),
+                    session_data.get("last_used", datetime.now().isoformat()),
+                    session_data.get("max_context_tokens", 64000),
+                    session_data.get("history_json"),
+                    session_data.get("metadata_json"),
+                    session_data.get("model_name"),
+                    session_data.get("system_prompt"),
+                ),
+            )
             conn.commit()
 
-        return session_data['session_id']
+        return session_data["session_id"]
 
     def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -215,13 +217,16 @@ class SessionDatabase:
         """
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT session_id, context, created_at, last_used,
                        max_context_tokens, history_json, metadata_json,
                        model_name, system_prompt
                 FROM sessions
                 WHERE session_id = ?
-            """, (session_id,))
+            """,
+                (session_id,),
+            )
 
             row = cursor.fetchone()
             if row is None:
@@ -231,8 +236,12 @@ class SessionDatabase:
 
     # Whitelist of allowed column names for updates
     ALLOWED_UPDATE_COLUMNS = {
-        'context', 'last_used', 'history_json',
-        'metadata_json', 'max_context_tokens', 'system_prompt'
+        "context",
+        "last_used",
+        "history_json",
+        "metadata_json",
+        "max_context_tokens",
+        "system_prompt",
     }
 
     def update_session(self, session_id: str, updates: Dict[str, Any]):
@@ -338,10 +347,13 @@ class SessionDatabase:
 
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 DELETE FROM sessions
                 WHERE last_used < ?
-            """, (cutoff,))
+            """,
+                (cutoff,),
+            )
             conn.commit()
             return cursor.rowcount
 
@@ -355,4 +367,4 @@ class SessionDatabase:
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) as count FROM sessions")
-            return cursor.fetchone()['count']
+            return cursor.fetchone()["count"]

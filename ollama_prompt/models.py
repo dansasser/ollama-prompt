@@ -5,8 +5,8 @@ Defines the structure and validation for session data.
 """
 
 from dataclasses import dataclass, field
-from typing import Optional
 from datetime import datetime
+from typing import Optional
 
 
 @dataclass
@@ -27,7 +27,7 @@ class SessionData:
     """
 
     session_id: str
-    context: str = ''
+    context: str = ""
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     last_used: str = field(default_factory=lambda: datetime.now().isoformat())
     max_context_tokens: int = 64000
@@ -44,19 +44,19 @@ class SessionData:
             dict: Dictionary representation of session data
         """
         return {
-            'session_id': self.session_id,
-            'context': self.context,
-            'created_at': self.created_at,
-            'last_used': self.last_used,
-            'max_context_tokens': self.max_context_tokens,
-            'history_json': self.history_json,
-            'metadata_json': self.metadata_json,
-            'model_name': self.model_name,
-            'system_prompt': self.system_prompt
+            "session_id": self.session_id,
+            "context": self.context,
+            "created_at": self.created_at,
+            "last_used": self.last_used,
+            "max_context_tokens": self.max_context_tokens,
+            "history_json": self.history_json,
+            "metadata_json": self.metadata_json,
+            "model_name": self.model_name,
+            "system_prompt": self.system_prompt,
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> 'SessionData':
+    def from_dict(cls, data: dict) -> "SessionData":
         """
         Create SessionData instance from dictionary.
 
@@ -67,15 +67,15 @@ class SessionData:
             SessionData: New instance populated from dictionary
         """
         return cls(
-            session_id=data['session_id'],
-            context=data.get('context', ''),
-            created_at=data.get('created_at', datetime.now().isoformat()),
-            last_used=data.get('last_used', datetime.now().isoformat()),
-            max_context_tokens=data.get('max_context_tokens', 64000),
-            history_json=data.get('history_json'),
-            metadata_json=data.get('metadata_json'),
-            model_name=data.get('model_name'),
-            system_prompt=data.get('system_prompt')
+            session_id=data["session_id"],
+            context=data.get("context", ""),
+            created_at=data.get("created_at", datetime.now().isoformat()),
+            last_used=data.get("last_used", datetime.now().isoformat()),
+            max_context_tokens=data.get("max_context_tokens", 64000),
+            history_json=data.get("history_json"),
+            metadata_json=data.get("metadata_json"),
+            model_name=data.get("model_name"),
+            system_prompt=data.get("system_prompt"),
         )
 
     def update_last_used(self):
