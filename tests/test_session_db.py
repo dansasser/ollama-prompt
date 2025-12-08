@@ -52,15 +52,21 @@ class TestSessionDatabase:
 
         # Cleanup - close and delete database file
         db.close()
-        try:
-            if os.path.exists(db_path):
-                os.unlink(db_path)
-        except PermissionError:
-            # Windows file locking - wait and retry
-            import time
-            time.sleep(0.1)
-            if os.path.exists(db_path):
-                os.unlink(db_path)
+
+        # Retry delete with exponential backoff (Windows can have brief file locks)
+        import time
+        for attempt in range(6):
+            try:
+                if os.path.exists(db_path):
+                    os.unlink(db_path)
+                break
+            except PermissionError:
+                time.sleep(0.1 * (2**attempt))
+            except FileNotFoundError:
+                break  # Already deleted
+        else:
+            # If still locked after retries, log and move on (system cleanup will handle it)
+            pass
 
     @pytest.fixture
     def sample_session(self):
@@ -242,7 +248,11 @@ class TestSessionDatabase:
         monkeypatch.setenv('OLLAMA_PROMPT_DB_PATH', custom_path)
 
         db = SessionDatabase()
-        assert db.db_path == custom_path
+
+        # Fix: Normalize both paths before asserting equality
+        norm_db_path = os.path.normcase(os.path.abspath(db.db_path))
+        norm_custom_path = os.path.normcase(os.path.abspath(custom_path))
+        assert norm_db_path == norm_custom_path
 
         # Cleanup
         db.close()

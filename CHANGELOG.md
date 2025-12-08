@@ -5,6 +5,53 @@ All notable changes to ollama-prompt will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+#### Directory Syntax for File References
+- **New directory operations** using `@` syntax in prompts:
+  - `@./dir/` or `@./dir/:list` - List directory contents
+  - `@./dir/:tree` - Show directory tree (depth=3)
+  - `@./dir/:search:PATTERN` - Search for pattern in files
+- Directory listings show `[DIR]` and `[FILE]` markers with sizes
+- Tree view uses ASCII art for hierarchical display
+- Search shows file:line:content for each match
+- All operations use secure llm-fs-tools backend
+- 17 new tests for directory syntax
+
+### Changed
+
+#### Security: Migrated to llm-fs-tools Package
+- **Replaced local `secure_file.py`** with `llm-fs-tools` package dependency
+- All secure file operations now use production-ready, shared implementation
+- Benefits:
+  - TOCTOU-safe file reading with fd-based validation
+  - Cross-platform secure open (O_NOFOLLOW on Unix, GetFinalPathNameByHandle on Windows)
+  - Symlink blocking, device file rejection, path traversal prevention
+  - Shared security implementation between ollama-prompt and other projects
+
+### Breaking Changes
+
+#### Python 3.10+ Required
+- **Minimum Python version raised from 3.7 to 3.10**
+- Reason: The new `llm-fs-tools` dependency requires Python 3.10+
+- Users on Python 3.7-3.9 must upgrade Python to use ollama-prompt v1.2.0+
+
+### Removed
+- `ollama_prompt/secure_file.py` (418 lines) - replaced by llm-fs-tools
+
+### Dependencies
+- Added: `llm-fs-tools>=0.1.0` (requires Python 3.10+)
+
+### Testing
+- Updated `tests/test_secure_file.py` to use llm-fs-tools imports
+- Skipped `TestHardlinkDetection` (check_hardlinks not in llm-fs-tools)
+- Added `tests/test_directory_syntax.py` with 17 tests
+- 67 tests passing, 7 skipped
+
+---
+
 ## [1.2.0] - 2025-10-31
 
 ### Added

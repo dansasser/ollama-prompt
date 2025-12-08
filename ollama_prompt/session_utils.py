@@ -3,7 +3,7 @@
 Session utility commands for managing stored sessions.
 """
 import json
-from datetime import datetime
+
 from .session_db import SessionDatabase
 
 
@@ -50,34 +50,33 @@ def list_sessions():
         for session in all_sessions:
             # Count messages if history_json exists
             message_count = 0
-            if session.get('history_json'):
+            if session.get("history_json"):
                 try:
-                    history = json.loads(session['history_json'])
-                    message_count = len(history.get('messages', []))
+                    history = json.loads(session["history_json"])
+                    message_count = len(history.get("messages", []))
                 except (json.JSONDecodeError, KeyError):
                     pass
 
             # Estimate tokens from context
-            context_tokens = len(session.get('context', '')) // 4
+            context_tokens = len(session.get("context", "")) // 4
 
-            sessions_info.append({
-                'session_id': session['session_id'],
-                'model_name': session.get('model_name', 'unknown'),
-                'created_at': session['created_at'],
-                'last_used': session['last_used'],
-                'message_count': message_count,
-                'context_tokens': context_tokens
-            })
+            sessions_info.append(
+                {
+                    "session_id": session["session_id"],
+                    "model_name": session.get("model_name", "unknown"),
+                    "created_at": session["created_at"],
+                    "last_used": session["last_used"],
+                    "message_count": message_count,
+                    "context_tokens": context_tokens,
+                }
+            )
 
-        output = {
-            'sessions': sessions_info,
-            'total': len(sessions_info)
-        }
+        output = {"sessions": sessions_info, "total": len(sessions_info)}
 
         print(json.dumps(output, indent=2))
 
     except Exception as e:
-        print(json.dumps({'error': f'Failed to list sessions: {e}'}))
+        print(json.dumps({"error": f"Failed to list sessions: {e}"}))
 
 
 def purge_sessions(days):
@@ -98,14 +97,14 @@ def purge_sessions(days):
         removed_count = db.purge_sessions(days)
 
         output = {
-            'removed': removed_count,
-            'message': f'Removed {removed_count} sessions older than {days} days'
+            "removed": removed_count,
+            "message": f"Removed {removed_count} sessions older than {days} days",
         }
 
         print(json.dumps(output, indent=2))
 
     except Exception as e:
-        print(json.dumps({'error': f'Failed to purge sessions: {e}'}))
+        print(json.dumps({"error": f"Failed to purge sessions: {e}"}))
 
 
 def show_session_info(session_id):
@@ -138,46 +137,48 @@ def show_session_info(session_id):
         session = db.get_session(session_id)
 
         if not session:
-            print(json.dumps({'error': f'Session not found: {session_id}'}))
+            print(json.dumps({"error": f"Session not found: {session_id}"}))
             return
 
         # Parse history_json if exists
         messages = []
-        if session.get('history_json'):
+        if session.get("history_json"):
             try:
-                history = json.loads(session['history_json'])
-                messages = history.get('messages', [])
+                history = json.loads(session["history_json"])
+                messages = history.get("messages", [])
             except (json.JSONDecodeError, KeyError):
                 pass
 
         # Calculate context usage
-        context_tokens = len(session.get('context', '')) // 4
-        max_tokens = session.get('max_context_tokens', 64000)
-        context_usage_percent = (context_tokens / max_tokens) * 100 if max_tokens > 0 else 0
+        context_tokens = len(session.get("context", "")) // 4
+        max_tokens = session.get("max_context_tokens", 64000)
+        context_usage_percent = (
+            (context_tokens / max_tokens) * 100 if max_tokens > 0 else 0
+        )
 
         # Parse metadata if exists
         metadata = {}
-        if session.get('metadata_json'):
+        if session.get("metadata_json"):
             try:
-                metadata = json.loads(session['metadata_json'])
+                metadata = json.loads(session["metadata_json"])
             except (json.JSONDecodeError, KeyError):
                 pass
 
         output = {
-            'session_id': session['session_id'],
-            'model_name': session.get('model_name', 'unknown'),
-            'created_at': session['created_at'],
-            'last_used': session['last_used'],
-            'max_context_tokens': max_tokens,
-            'context_tokens': context_tokens,
-            'context_usage_percent': round(context_usage_percent, 2),
-            'message_count': len(messages),
-            'messages': messages,
-            'system_prompt': session.get('system_prompt'),
-            'metadata': metadata
+            "session_id": session["session_id"],
+            "model_name": session.get("model_name", "unknown"),
+            "created_at": session["created_at"],
+            "last_used": session["last_used"],
+            "max_context_tokens": max_tokens,
+            "context_tokens": context_tokens,
+            "context_usage_percent": round(context_usage_percent, 2),
+            "message_count": len(messages),
+            "messages": messages,
+            "system_prompt": session.get("system_prompt"),
+            "metadata": metadata,
         }
 
         print(json.dumps(output, indent=2))
 
     except Exception as e:
-        print(json.dumps({'error': f'Failed to get session info: {e}'}))
+        print(json.dumps({"error": f"Failed to get session info: {e}"}))

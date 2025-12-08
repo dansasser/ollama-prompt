@@ -10,18 +10,20 @@ Handles:
 - Session updates after each exchange
 """
 import json
-import uuid
 import os
+import uuid
 from datetime import datetime
-from typing import Optional, Tuple, Dict, Any, List
+from typing import Any, Dict, List, Optional, Tuple
 
-from .session_db import SessionDatabase
 from .models import SessionData
+from .session_db import SessionDatabase
 
 # Resource limits to prevent exhaustion attacks
 MAX_SESSIONS = 1000  # Maximum total sessions allowed
 MAX_MESSAGE_SIZE = 1_000_000  # 1MB per message
-MAX_SESSIONS_AUTO_PURGE_DAYS = 30  # Auto-purge sessions older than this when limit reached
+MAX_SESSIONS_AUTO_PURGE_DAYS = (
+    30  # Auto-purge sessions older than this when limit reached
+)
 
 
 class SessionManager:
@@ -49,7 +51,7 @@ class SessionManager:
         session_id: Optional[str] = None,
         model_name: Optional[str] = None,
         max_context_tokens: Optional[int] = None,
-        system_prompt: Optional[str] = None
+        system_prompt: Optional[str] = None,
     ) -> Tuple[Dict[str, Any], bool]:
         """
         Get existing session or create new one.
@@ -75,9 +77,9 @@ class SessionManager:
                 raise ValueError(f"Session not found: {session_id}")
 
             # Update last_used timestamp
-            self.db.update_session(session_id, {
-                'last_used': datetime.now().isoformat()
-            })
+            self.db.update_session(
+                session_id, {"last_used": datetime.now().isoformat()}
+            )
 
             return session, False
 
@@ -100,24 +102,29 @@ class SessionManager:
 
         # Get max_context_tokens from env or use default
         if max_context_tokens is None:
-            env_value = os.getenv('OLLAMA_PROMPT_MAX_CONTEXT_TOKENS', '64000')
+            env_value = os.getenv("OLLAMA_PROMPT_MAX_CONTEXT_TOKENS", "64000")
             try:
                 max_context_tokens = int(env_value)
             except ValueError:
                 max_context_tokens = 64000
-                print(f"Warning: Invalid OLLAMA_PROMPT_MAX_CONTEXT_TOKENS value '{env_value}', using default 64000", file=__import__('sys').stderr)
+                print(
+                    f"Warning: Invalid OLLAMA_PROMPT_MAX_CONTEXT_TOKENS value '{env_value}', using default 64000",
+                    file=__import__("sys").stderr,
+                )
 
         session_data = {
-            'session_id': new_session_id,
-            'context': '',
-            'max_context_tokens': max_context_tokens,
-            'history_json': json.dumps({'messages': []}),
-            'model_name': model_name,
-            'system_prompt': system_prompt
+            "session_id": new_session_id,
+            "context": "",
+            "max_context_tokens": max_context_tokens,
+            "history_json": json.dumps({"messages": []}),
+            "model_name": model_name,
+            "system_prompt": system_prompt,
         }
 
         created_id = self.db.create_session(session_data)
         created_session = self.db.get_session(created_id)
+        if created_session is None:
+            raise RuntimeError(f"Session {created_id} was just created but not found in database")
 
         return created_session, True
 
@@ -144,24 +151,29 @@ class SessionManager:
         # Check if pruning is needed (90% threshold)
         if session_data.is_context_near_limit(threshold=0.9):
             # Store original state to detect changes
-            original_history_json = session.get('history_json')
+            original_history_json = session.get("history_json")
 
             # Prune and rebuild context
             session = self._prune_and_rebuild_context(session)
 
             # Persist pruned state if it changed
-            if session.get('history_json') != original_history_json:
-                self.db.update_session(session['session_id'], {
-                    'history_json': session['history_json'],
-                    'context': session['context']
-                })
+            if session.get("history_json") != original_history_json:
+                self.db.update_session(
+                    session["session_id"],
+                    {
+                        "history_json": session["history_json"],
+                        "context": session["context"],
+                    },
+                )
 
         # Get current context (may be empty for new sessions)
-        context = session.get('context', '')
+        context = session.get("context", "")
 
         # Prepend system prompt if exists
-        if session.get('system_prompt'):
-            full_prompt = f"{session['system_prompt']}\n\n{context}\n\nUser: {user_prompt}"
+        if session.get("system_prompt"):
+            full_prompt = (
+                f"{session['system_prompt']}\n\n{context}\n\nUser: {user_prompt}"
+            )
         elif context:
             full_prompt = f"{context}\n\nUser: {user_prompt}"
         else:
@@ -170,10 +182,7 @@ class SessionManager:
         return full_prompt
 
     def update_session(
-        self,
-        session: Dict[str, Any],
-        user_prompt: str,
-        assistant_response: str
+        self, session: Dict[str, Any], user_prompt: str, assistant_response: str
     ) -> None:
         """
         Update session with new exchange.
@@ -197,20 +206,20 @@ class SessionManager:
         """
         # SECURITY: Validate message sizes to prevent resource exhaustion
         # Use encoded byte length for accurate size measurement
-        user_prompt_bytes = len(user_prompt.encode('utf-8'))
+        user_prompt_bytes = len(user_prompt.encode("utf-8"))
         if user_prompt_bytes > MAX_MESSAGE_SIZE:
             raise ValueError(
                 f"User prompt too large: {user_prompt_bytes} bytes "
                 f"(maximum {MAX_MESSAGE_SIZE} bytes)"
             )
-        assistant_response_bytes = len(assistant_response.encode('utf-8'))
+        assistant_response_bytes = len(assistant_response.encode("utf-8"))
         if assistant_response_bytes > MAX_MESSAGE_SIZE:
             raise ValueError(
                 f"Assistant response too large: {assistant_response_bytes} bytes "
                 f"(maximum {MAX_MESSAGE_SIZE} bytes)"
             )
 
-        session_id = session['session_id']
+        session_id = session["session_id"]
 
         # Reload session from database to get latest state
         current_session = self.db.get_session(session_id)
@@ -218,34 +227,40 @@ class SessionManager:
             raise ValueError(f"Session not found: {session_id}")
 
         # Parse existing history
-        history = json.loads(current_session.get('history_json', '{"messages": []}'))
-        messages = history.get('messages', [])
+        history = json.loads(current_session.get("history_json", '{"messages": []}'))
+        messages = history.get("messages", [])
 
         # Create timestamp
         timestamp = datetime.now().isoformat()
 
         # Estimate tokens (4 chars = 1 token, minimum 1 token for non-empty strings)
         user_tokens = max(1, len(user_prompt) // 4) if user_prompt else 0
-        assistant_tokens = max(1, len(assistant_response) // 4) if assistant_response else 0
+        assistant_tokens = (
+            max(1, len(assistant_response) // 4) if assistant_response else 0
+        )
 
         # Append new messages
-        messages.append({
-            'role': 'user',
-            'content': user_prompt,
-            'timestamp': timestamp,
-            'tokens': user_tokens
-        })
+        messages.append(
+            {
+                "role": "user",
+                "content": user_prompt,
+                "timestamp": timestamp,
+                "tokens": user_tokens,
+            }
+        )
 
-        messages.append({
-            'role': 'assistant',
-            'content': assistant_response,
-            'timestamp': timestamp,
-            'tokens': assistant_tokens
-        })
+        messages.append(
+            {
+                "role": "assistant",
+                "content": assistant_response,
+                "timestamp": timestamp,
+                "tokens": assistant_tokens,
+            }
+        )
 
         # Check if pruning is needed after adding new messages
-        max_tokens = current_session.get('max_context_tokens', 64000)
-        total_tokens = sum(msg.get('tokens', 0) for msg in messages)
+        max_tokens = current_session.get("max_context_tokens", 64000)
+        total_tokens = sum(msg.get("tokens", 0) for msg in messages)
 
         # Prune if over 90% of limit
         if total_tokens > (max_tokens * 0.9):
@@ -254,32 +269,39 @@ class SessionManager:
             # Remove oldest messages until under target
             while total_tokens > target_tokens and len(messages) > 2:
                 removed = messages.pop(0)
-                total_tokens -= removed.get('tokens', 0)
+                total_tokens -= removed.get("tokens", 0)
 
                 # If there's an assistant message after the user message, remove it too
                 # But only if we'll still have at least 2 messages after removal
-                if messages and messages[0].get('role') == 'assistant' and len(messages) >= 3:
+                if (
+                    messages
+                    and messages[0].get("role") == "assistant"
+                    and len(messages) >= 3
+                ):
                     removed = messages.pop(0)
-                    total_tokens -= removed.get('tokens', 0)
+                    total_tokens -= removed.get("tokens", 0)
 
         # Serialize back to JSON
-        history['messages'] = messages
+        history["messages"] = messages
         history_json = json.dumps(history)
 
         # Rebuild cached plain text from messages
         cached_context = self._build_context_from_messages(messages)
 
         # Update database
-        self.db.update_session(session_id, {
-            'history_json': history_json,
-            'context': cached_context,
-            'last_used': timestamp
-        })
+        self.db.update_session(
+            session_id,
+            {
+                "history_json": history_json,
+                "context": cached_context,
+                "last_used": timestamp,
+            },
+        )
 
         # Update in-memory session dict to keep it in sync
-        session['history_json'] = history_json
-        session['context'] = cached_context
-        session['last_used'] = timestamp
+        session["history_json"] = history_json
+        session["context"] = cached_context
+        session["last_used"] = timestamp
 
     def _prune_and_rebuild_context(self, session: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -298,35 +320,39 @@ class SessionManager:
         Returns:
             Updated session dictionary with pruned context
         """
-        max_tokens = session.get('max_context_tokens', 64000)
+        max_tokens = session.get("max_context_tokens", 64000)
         target_tokens = int(max_tokens * 0.8)  # Prune to 80%
 
         # Parse history
-        history = json.loads(session.get('history_json', '{"messages": []}'))
-        messages = history.get('messages', [])
+        history = json.loads(session.get("history_json", '{"messages": []}'))
+        messages = history.get("messages", [])
 
         if not messages:
             return session
 
         # Calculate current total tokens
-        total_tokens = sum(msg.get('tokens', 0) for msg in messages)
+        total_tokens = sum(msg.get("tokens", 0) for msg in messages)
 
         # Prune from the start (oldest messages) if over target
         while total_tokens > target_tokens and len(messages) > 2:
             # Remove oldest exchange (user + assistant pair)
             removed = messages.pop(0)
-            total_tokens -= removed.get('tokens', 0)
+            total_tokens -= removed.get("tokens", 0)
 
             # If there's an assistant message after the user message, remove it too
             # But only if we'll still have at least 2 messages after removal
-            if messages and messages[0].get('role') == 'assistant' and len(messages) > 2:
+            if (
+                messages
+                and messages[0].get("role") == "assistant"
+                and len(messages) > 2
+            ):
                 removed = messages.pop(0)
-                total_tokens -= removed.get('tokens', 0)
+                total_tokens -= removed.get("tokens", 0)
 
         # Rebuild history and context
-        history['messages'] = messages
-        session['history_json'] = json.dumps(history)
-        session['context'] = self._build_context_from_messages(messages)
+        history["messages"] = messages
+        session["history_json"] = json.dumps(history)
+        session["context"] = self._build_context_from_messages(messages)
 
         return session
 
@@ -349,11 +375,11 @@ class SessionManager:
         context_lines = []
 
         for msg in messages:
-            role = msg.get('role', 'unknown').capitalize()
-            content = msg.get('content', '')
+            role = msg.get("role", "unknown").capitalize()
+            content = msg.get("content", "")
             context_lines.append(f"{role}: {content}")
 
-        return '\n\n'.join(context_lines)
+        return "\n\n".join(context_lines)
 
     def close(self):
         """Close database connection."""
