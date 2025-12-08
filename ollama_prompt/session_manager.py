@@ -118,6 +118,7 @@ class SessionManager:
 
         created_id = self.db.create_session(session_data)
         created_session = self.db.get_session(created_id)
+        assert created_session is not None, "Session was just created but not found"
 
         return created_session, True
 

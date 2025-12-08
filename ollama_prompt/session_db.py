@@ -312,13 +312,12 @@ class SessionDatabase:
         """
 
         # Validate limit parameter (SECURITY: prevent SQL injection)
+        params: tuple[int, ...] = ()
         if limit is not None:
             if not isinstance(limit, int) or limit <= 0:
                 raise ValueError(f"Invalid limit value: {limit}")
             query += " LIMIT ?"
             params = (limit,)
-        else:
-            params = ()
 
         with self._get_connection() as conn:
             cursor = conn.cursor()
