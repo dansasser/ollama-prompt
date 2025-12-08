@@ -108,8 +108,13 @@ def list_directory(path, repo_root="."):
         if path in (".", "./", ".\\"):
             target_dir = abs_repo
         else:
-            # Strip leading ./ or .\
-            clean_path = path.lstrip("./").lstrip(".\\")
+            # Strip leading ./ or .\ prefix
+            if path.startswith("./"):
+                clean_path = path[2:]
+            elif path.startswith(".\\"):
+                clean_path = path[2:]
+            else:
+                clean_path = path
             target_dir = os.path.join(abs_repo, clean_path)
 
         tools = create_directory_tools(abs_repo)
@@ -162,7 +167,13 @@ def get_directory_tree(path, repo_root=".", max_depth=3):
         if path in (".", "./", ".\\"):
             target_dir = abs_repo
         else:
-            clean_path = path.lstrip("./").lstrip(".\\")
+            # Strip leading ./ or .\ prefix
+            if path.startswith("./"):
+                clean_path = path[2:]
+            elif path.startswith(".\\"):
+                clean_path = path[2:]
+            else:
+                clean_path = path
             target_dir = os.path.join(abs_repo, clean_path)
 
         tools = create_directory_tools(abs_repo)
@@ -235,7 +246,13 @@ def search_directory(path, pattern, repo_root=".", max_results=50):
         if path in (".", "./", ".\\"):
             target_dir = abs_repo
         else:
-            clean_path = path.lstrip("./").lstrip(".\\")
+            # Strip leading ./ or .\ prefix
+            if path.startswith("./"):
+                clean_path = path[2:]
+            elif path.startswith(".\\"):
+                clean_path = path[2:]
+            else:
+                clean_path = path
             target_dir = os.path.join(abs_repo, clean_path)
 
         tools = create_directory_tools(abs_repo)
