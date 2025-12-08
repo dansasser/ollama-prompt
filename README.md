@@ -56,8 +56,8 @@ ollama-prompt --prompt "Analyze @./src/auth.py for security issues" \
 - **Session Management** - Persistent conversations across CLI invocations
 - **Rich Metadata** - Full JSON output with token counts, timing, and cost tracking
 - **File References** - Reference local files with `@./path/to/file.py` syntax
-- **Directory Operations** - List, tree view, and search with `@./dir/` syntax
-- **Secure File Access** - TOCTOU-safe operations via [llm-fs-tools](https://github.com/dansasser/llm-filesystem-tools)
+- **Directory Operations** - List, tree view, and search with `@./dir/` syntax (full read access within repo root)
+- **Secure File Access** - TOCTOU-safe operations with path validation via [llm-fs-tools](https://github.com/dansasser/llm-filesystem-tools)
 - **Subprocess-Friendly** - Designed for agent orchestration and automation
 - **Cloud & Local Models** - Works with both Ollama cloud models and local instances
 - **Cross-Platform** - Windows, macOS, Linux with Python 3.10+
@@ -152,6 +152,8 @@ ollama-prompt --prompt "Show the structure: @./src/:tree"
 ollama-prompt --prompt "Find TODO comments: @./src/:search:TODO"
 ```
 
+> **⚠️ Security Note:** `ollama-prompt` has **read access to all files and directories** within the current working directory (repository root). File operations are TOCTOU-safe and validate paths to prevent traversal attacks, but the tool can read any accessible file. Only run in trusted directories.
+
 **Directory Syntax:**
 | Syntax | Description | Example |
 |--------|-------------|---------|
@@ -216,7 +218,7 @@ This table clarifies its niche compared to other common tools:
 | **Key "Win"** | Total flexibility. | **Universality:** Supports Ollama, OpenAI, Anthropic, etc. | **Automation:** Built to be called by other AI agents (like Claude/Gemini). |
 | **Output Format** | Raw JSON response. | Plain text (default), with a flag for JSON (`--json`). | **Structured JSON** (default), with rich metadata (tokens, time). |
 | **Session Memory** | **Manual:** You must track and resend the entire message history. | **Automatic:** Logs all prompts/responses to a local SQLite DB. | **Automatic (via flag):** Uses `--session-id` to persist context. |
-| **File Handling** | **Manual:** Requires code to read the file and inject its content. | **Manual (via piping):** Requires `cat file.py \| llm -s "..."` | **Built-in:** Simple `@./file.py` syntax in the prompt. |
+| **File Handling** | **Manual:** Requires code to read the file and inject its content. | **Manual (via piping):** Requires `cat file.py \| llm -s "..."` | **Built-in:** `@./file.py` for files, `@./dir/` for directories (full read access). |
 
 **Built for:**
 - **Terminal AI assistants (Claude, Codex, Gemini CLI)** - Delegate analysis via subprocess
