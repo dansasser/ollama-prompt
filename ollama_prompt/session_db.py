@@ -44,37 +44,6 @@ def get_default_db_path() -> Path:
             pass
 
     return db_dir / "sessions.db"
-    """
-    Get platform-appropriate database path for SQLite.
-
-    Returns:
-        Path: Database file path
-
-    Platform-specific locations:
-        - Windows: %APPDATA%\\ollama-prompt\\sessions.db
-        - Unix/Linux/Mac: ~/.config/ollama-prompt/sessions.db
-    """
-    if os.name == "nt":  # Windows
-        base = Path(os.getenv("APPDATA", Path.home()))
-    else:  # Unix/Linux/Mac
-        base = Path.home() / ".config"
-
-    db_dir = base / "ollama-prompt"
-
-    # SECURITY: Create directory with restrictive permissions (user-only access)
-    # On Unix/Linux/Mac: 0o700 (rwx------)
-    # On Windows: mkdir handles permissions via ACLs
-    db_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-
-    # On Unix systems, explicitly set permissions in case umask prevented proper mode
-    if os.name != "nt" and db_dir.exists():
-        try:
-            os.chmod(db_dir, 0o700)
-        except (OSError, PermissionError):
-            # Best effort - may fail if not owner
-            pass
-
-    return db_dir / "sessions.db"
 
 
 class SessionDatabase:
