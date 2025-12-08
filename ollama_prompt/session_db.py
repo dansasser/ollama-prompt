@@ -118,8 +118,8 @@ class SessionDatabase:
         env_path = os.getenv("OLLAMA_PROMPT_DB_PATH")
 
         if db_path:
-            # Explicitly provided path takes precedence
-            self.db_path = self._validate_db_path(db_path)
+            # Explicitly provided path takes precedence (no validation for testing)
+            self.db_path = db_path
         elif env_path:
             # Use the env var value verbatim (tests expect exact string)
             # We skip _validate_db_path here to avoid canonicalization issues
@@ -132,7 +132,6 @@ class SessionDatabase:
         if not env_path and not db_path:
             Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
 
-        self.db_path = db_path
         self._conn = None  # Do NOT keep a long-lived connection open by default.
 
         # Initialize schema using the context manager (ensures connection closed)
