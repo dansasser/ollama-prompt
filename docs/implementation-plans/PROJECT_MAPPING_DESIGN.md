@@ -1,6 +1,6 @@
 # Project Mapping as a First-Class Feature
 
-**Date:** December 8, 2024  
+**Date:** December 8, 2025  
 **For:** ollama-prompt Development Team  
 **Topic:** Should project mapping be part of context management or a separate feature?
 

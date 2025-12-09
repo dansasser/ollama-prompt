@@ -25,7 +25,7 @@ When a file is referenced, instead of sending the full content, send a **structu
 --- FILE: src/user_manager.py (SUMMARY) ---
 Language: Python
 Size: 1,247 lines, 45.2 KB
-Last modified: 2024-12-07
+Last modified: 2025-12-07
 
 Structure:
   - Imports: requests, sqlite3, hashlib, datetime

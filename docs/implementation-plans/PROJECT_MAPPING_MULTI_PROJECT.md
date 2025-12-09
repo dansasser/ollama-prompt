@@ -1,6 +1,6 @@
 # Project Mapping: Multi-Project Scenarios
 
-**Date:** December 8, 2024  
+**Date:** December 8, 2025  
 **Addendum to:** PROJECT_MAPPING_DESIGN.md  
 **Topic:** Handling multiple projects, nested projects, and cross-project tasks
 
