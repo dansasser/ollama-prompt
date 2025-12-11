@@ -19,14 +19,14 @@ We implement a graduated response system that progressively compacts context as 
 
 | Level | Trigger | Action | Token Savings | Information Loss |
 |-------|---------|--------|---------------|------------------|
-| **0: Normal** | < 60% full | No action | 0% | None |
-| **1: Soft Compact** | 60-75% full | Compress file content | 30-50% | Minimal |
-| **2: Hard Compact** | 75-90% full | Summarize old messages | 50-70% | Moderate |
-| **3: Emergency** | > 90% full | Aggressive pruning | 70-85% | Significant but controlled |
+| **0: Normal** | < 50% full | No action | 0% | None |
+| **1: Soft Compact** | 50-65% full | Compress file content | 30-50% | Minimal |
+| **2: Hard Compact** | 65-80% full | Summarize old messages | 50-70% | Moderate |
+| **3: Emergency** | > 80% full | Aggressive pruning | 70-85% | Significant but controlled |
 
-## Level 1: Soft Compaction (60-75% Full)
+## Level 1: Soft Compaction (50-65% Full)
 
-**Trigger:** Context window reaches 60% capacity
+**Trigger:** Context window reaches 50% capacity
 
 **Strategy:** Recompress file content that was sent in full earlier in the conversation
 
@@ -41,7 +41,7 @@ Message 1: "@./user_manager.py:full explain authentication"
 
 Message 2-5: [Discussion about authentication]
 
-Message 6: [Context reaches 60%]
+Message 6: [Context reaches 50%]
 System: Recompresses user_manager.py from 45KB → 2KB summary
          Keeps the conversation history intact
          
@@ -72,11 +72,11 @@ class ContextManager:
         """
         usage = self.current_tokens / self.max_tokens
         
-        if usage < 0.60:
+        if usage < 0.50:
             return 0
-        elif usage < 0.75:
+        elif usage < 0.65:
             return 1
-        elif usage < 0.90:
+        elif usage < 0.80:
             return 2
         else:
             return 3
@@ -133,9 +133,9 @@ class ContextManager:
         return len(text) // 4
 ```
 
-## Level 2: Hard Compaction (75-90% Full)
+## Level 2: Hard Compaction (65-80% Full)
 
-**Trigger:** Context window reaches 75% capacity
+**Trigger:** Context window reaches 65% capacity
 
 **Strategy:** Summarize older conversation messages while preserving recent context
 
@@ -248,9 +248,9 @@ def _generate_summary(self, prompt: str) -> str:
     return response['response']
 ```
 
-## Level 3: Emergency Compaction (>90% Full)
+## Level 3: Emergency Compaction (>80% Full)
 
-**Trigger:** Context window reaches 90% capacity
+**Trigger:** Context window reaches 80% capacity
 
 **Strategy:** Aggressive pruning with intelligent preservation of critical context
 

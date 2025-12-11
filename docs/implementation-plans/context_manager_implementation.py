@@ -6,6 +6,7 @@ This module implements a self-managing context window that automatically
 decides when and how to compact context based on usage patterns.
 """
 
+import hashlib
 import numpy as np
 import ollama
 from typing import List, Dict, Tuple, Optional
@@ -134,6 +135,8 @@ class ContextManager:
             tokens_freed = self._hard_compact()
         elif required_level == 3:
             tokens_freed = self._emergency_compact()
+        else:
+            tokens_freed = 0  # Safety fallback for unexpected levels
         
         tokens_after = self.current_tokens
         
@@ -389,10 +392,12 @@ class ContextManager:
         # Rebuild message list
         self.messages = [summary_message] + recent_messages
         
+        # Recalculate current_tokens from rebuilt message list (includes summary_message tokens)
+        self.current_tokens = sum(msg['tokens'] for msg in self.messages)
+        
+        # tokens_freed includes both file compression and conversation summarization
         tokens_saved = old_tokens - summary_tokens
         tokens_freed += tokens_saved
-        
-        self.current_tokens -= tokens_saved
         
         print(f"[Context Manager] EMERGENCY: Summarized {len(old_messages)} messages into {summary_tokens} tokens")
         
@@ -530,7 +535,7 @@ class LightweightVectorScorer:
             Embedding vector as numpy array
         """
         # Check cache
-        cache_key = hash(text[:200])  # Hash first 200 chars
+        cache_key = hashlib.md5(text.encode('utf-8')).hexdigest()  # Stable hash across sessions
         if cache_key in self.cache:
             return self.cache[cache_key]
         

@@ -438,7 +438,10 @@ class EmbeddingManager:
     
     def cosine_similarity(self, a: np.ndarray, b: np.ndarray) -> float:
         """Calculate cosine similarity between two embeddings."""
-        return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+        norm_product = np.linalg.norm(a) * np.linalg.norm(b)
+        if norm_product == 0:
+            return 0.0
+        return np.dot(a, b) / norm_product
     
     def find_relevant_chunks(
         self, 
