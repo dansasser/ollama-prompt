@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Intelligent Context Window Management (In Progress)
+- **FileChunker module** - Smart file summarization with 90%+ token savings
+  - Python AST parsing for class/function extraction
+  - Markdown section-based summarization
+  - Generic line-count fallback for other file types
+- **Enhanced file reference syntax:**
+  - `@./file.py` - Auto-summary for files >5KB (NEW DEFAULT)
+  - `@./file.py:full` - Full content (old behavior)
+  - `@./file.py:function_name` - Extract specific function/class
+  - `@./file.py:lines:100-150` - Extract line range
+- **3-Level automatic compaction:**
+  - Level 1 (50%): Soft compaction - recompress stale files
+  - Level 2 (65%): Hard compaction - prune low-relevance messages
+  - Level 3 (80%): Emergency compaction - LLM-based summarization
+- **Structured message storage** - Enables selective pruning vs blob truncation
+- **Compaction audit trail** - Track all compaction events for debugging
+
 #### Directory Syntax for File References
 - **New directory operations** using `@` syntax in prompts:
   - `@./dir/` or `@./dir/:list` - List directory contents
@@ -49,6 +66,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Skipped `TestHardlinkDetection` (check_hardlinks not in llm-fs-tools)
 - Added `tests/test_directory_syntax.py` with 17 tests
 - 67 tests passing, 7 skipped
+
+### Database Schema (In Progress)
+
+#### New Tables
+- **messages** - Structured message storage (replaces JSON blob)
+- **file_references** - Track file usage per message
+- **compaction_history** - Audit trail for compaction events
+- **schema_version** - Enable automatic migrations
+
+#### Migration
+- Automatic V1 to V2 migration on first connect
+- Backup created before migration
+- Backward compatible (old sessions still work)
+
+### New Modules (In Progress)
+- `ollama_prompt/file_chunker.py` - Smart file summarization (~300 LOC)
+- `ollama_prompt/context_manager.py` - Automatic compaction (~400 LOC)
+- `ollama_prompt/vector_embedder.py` - Optional semantic scoring (~200 LOC)
 
 ---
 
@@ -193,7 +228,14 @@ ollama-prompt --prompt "What is 2+2?" --no-session
 
 ## Future Roadmap
 
-Potential features for future releases:
+### v1.3.0 (In Development)
+- Intelligent context window management
+- Smart file summarization (FileChunker)
+- 3-level automatic compaction
+- Structured message storage
+- Optional vector-based relevance scoring
+
+### Future Releases
 - MongoDB adapter for distributed deployments
 - Session export/import functionality
 - Advanced analytics and session metrics
