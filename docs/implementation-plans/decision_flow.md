@@ -227,14 +227,17 @@ cm.add_message('user', 'How does password hashing work?')  # 500 tokens
 ## Key Decision Points
 
 ### 1. When to Compact? (Automatic)
+
+Thresholds per IMPLEMENTATION_PLAN_ADDENDUM.md:
+
 ```python
 usage = current_tokens / max_tokens
 
-if usage >= 0.90:
+if usage >= 0.80:
     level = 3  # Emergency
-elif usage >= 0.75:
+elif usage >= 0.65:
     level = 2  # Hard
-elif usage >= 0.60:
+elif usage >= 0.50:
     level = 1  # Soft
 else:
     level = 0  # No compaction
