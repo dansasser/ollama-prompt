@@ -143,6 +143,19 @@ class SessionDatabase:
 
     CREATE INDEX IF NOT EXISTS idx_compaction_session
     ON compaction_history(session_id);
+
+    -- Vector embeddings for semantic relevance scoring
+    CREATE TABLE IF NOT EXISTS embeddings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        message_id INTEGER NOT NULL,
+        model TEXT NOT NULL,
+        embedding BLOB NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_embeddings_message
+    ON embeddings(message_id);
     """
 
     # Combined schema for new databases

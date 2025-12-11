@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from ollama_prompt.session_db import SessionDatabase
 from ollama_prompt.file_chunker import FileChunker
+from ollama_prompt.vector_embedder import VectorEmbedder
 
 
 class ContextManager:
@@ -55,7 +56,9 @@ class ContextManager:
         session_id: str,
         max_tokens: int = 64000,
         file_chunker: Optional[FileChunker] = None,
-        llm_summarizer: Optional[callable] = None
+        llm_summarizer: Optional[callable] = None,
+        vector_embedder: Optional[VectorEmbedder] = None,
+        use_vector_scoring: bool = True
     ):
         """
         Initialize context manager.
@@ -67,12 +70,19 @@ class ContextManager:
             file_chunker: FileChunker instance for file operations
             llm_summarizer: Optional callback for LLM summarization
                            Signature: (messages: List[Dict]) -> str
+            vector_embedder: Optional VectorEmbedder for semantic scoring
+            use_vector_scoring: Whether to use vector scoring (falls back to keywords)
         """
         self.db = db
         self.session_id = session_id
         self.max_tokens = max_tokens
         self.chunker = file_chunker or FileChunker()
         self.llm_summarizer = llm_summarizer
+        self.use_vector_scoring = use_vector_scoring
+
+        # Lazy-load vector embedder only when needed
+        self._vector_embedder = vector_embedder
+        self._vector_available: Optional[bool] = None
 
         # Cooldown tracking
         self._last_compaction_time: Optional[datetime] = None
@@ -85,6 +95,28 @@ class ContextManager:
                 self._last_compaction_time = datetime.fromisoformat(last["timestamp"])
             except (ValueError, KeyError):
                 pass
+
+    def _get_vector_embedder(self) -> Optional[VectorEmbedder]:
+        """
+        Get vector embedder, creating it lazily if needed.
+
+        Returns:
+            VectorEmbedder instance, or None if not available/disabled
+        """
+        if not self.use_vector_scoring:
+            return None
+
+        if self._vector_embedder is None:
+            self._vector_embedder = VectorEmbedder()
+
+        # Check if model is available (cached after first check)
+        if self._vector_available is None:
+            self._vector_available = self._vector_embedder.is_available()
+
+        if not self._vector_available:
+            return None
+
+        return self._vector_embedder
 
     def get_usage(self) -> float:
         """
@@ -383,7 +415,34 @@ class ContextManager:
 
     def _calculate_relevance(self, message: Dict[str, Any], context: str) -> float:
         """
-        Calculate relevance score for a message using keyword overlap.
+        Calculate relevance score for a message.
+
+        Uses vector embeddings for semantic similarity if available,
+        falls back to keyword-based scoring otherwise.
+
+        Args:
+            message: Message dictionary
+            context: Recent context to compare against
+
+        Returns:
+            float: Relevance score (0.0 to 1.0)
+        """
+        message_content = message.get("content", "")
+
+        # Try vector-based scoring first
+        embedder = self._get_vector_embedder()
+        if embedder:
+            vector_score = embedder.score_relevance(message_content, context)
+            if vector_score > 0:
+                # Apply boosts to vector score
+                return self._apply_relevance_boosts(message, vector_score)
+
+        # Fall back to keyword-based scoring
+        return self._calculate_keyword_relevance(message, context)
+
+    def _calculate_keyword_relevance(self, message: Dict[str, Any], context: str) -> float:
+        """
+        Calculate relevance score using keyword overlap (Jaccard similarity).
 
         Args:
             message: Message dictionary
@@ -409,6 +468,20 @@ class ContextManager:
             return 0.0
 
         base_score = intersection / union
+        return self._apply_relevance_boosts(message, base_score)
+
+    def _apply_relevance_boosts(self, message: Dict[str, Any], base_score: float) -> float:
+        """
+        Apply boosts to relevance score based on message characteristics.
+
+        Args:
+            message: Message dictionary
+            base_score: Initial relevance score
+
+        Returns:
+            float: Boosted score (capped at 1.0)
+        """
+        message_content = message.get("content", "")
 
         # Boost for certain message types
         role = message.get("role", "")
