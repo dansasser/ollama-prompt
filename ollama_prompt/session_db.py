@@ -2,14 +2,24 @@
 Database abstraction layer for session persistence.
 
 Supports SQLite (default) and MongoDB (optional) backends.
+
+Schema Versions:
+- V1: Original schema (sessions table only)
+- V2: Context management schema (messages, file_references, compaction_history)
 """
 
+import json
 import os
+import shutil
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from contextlib import contextmanager
+
+
+# Current schema version
+SCHEMA_VERSION = 2
 
 
 def get_default_db_path() -> Path:
@@ -54,7 +64,8 @@ class SessionDatabase:
     schema creation, and CRUD operations for sessions.
     """
 
-    SCHEMA = """
+    # V1 Schema - Original sessions table
+    SCHEMA_V1 = """
     CREATE TABLE IF NOT EXISTS sessions (
         session_id TEXT PRIMARY KEY,
         context TEXT NOT NULL DEFAULT '',
@@ -73,6 +84,69 @@ class SessionDatabase:
     CREATE INDEX IF NOT EXISTS idx_sessions_model
     ON sessions(model_name);
     """
+
+    # V2 Schema - Context management tables
+    SCHEMA_V2 = """
+    -- Schema version tracking
+    CREATE TABLE IF NOT EXISTS schema_version (
+        version INTEGER PRIMARY KEY,
+        upgraded_at TEXT NOT NULL
+    );
+
+    -- Structured message storage for selective compaction
+    CREATE TABLE IF NOT EXISTS messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        tokens INTEGER NOT NULL DEFAULT 0,
+        timestamp TEXT NOT NULL,
+        is_summary BOOLEAN DEFAULT FALSE,
+        FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_messages_session
+    ON messages(session_id);
+
+    CREATE INDEX IF NOT EXISTS idx_messages_timestamp
+    ON messages(timestamp);
+
+    -- Track file references per message for stale detection
+    CREATE TABLE IF NOT EXISTS file_references (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        message_id INTEGER NOT NULL,
+        file_path TEXT NOT NULL,
+        mode TEXT NOT NULL,
+        tokens INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_file_refs_message
+    ON file_references(message_id);
+
+    CREATE INDEX IF NOT EXISTS idx_file_refs_path
+    ON file_references(file_path);
+
+    -- Compaction audit trail
+    CREATE TABLE IF NOT EXISTS compaction_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        timestamp TEXT NOT NULL,
+        level INTEGER NOT NULL,
+        tokens_before INTEGER NOT NULL,
+        tokens_after INTEGER NOT NULL,
+        tokens_freed INTEGER NOT NULL,
+        strategy TEXT NOT NULL,
+        details TEXT,
+        FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_compaction_session
+    ON compaction_history(session_id);
+    """
+
+    # Combined schema for new databases
+    SCHEMA = SCHEMA_V1 + SCHEMA_V2
 
     def __init__(self, db_path: Optional[str] = None):
         """
@@ -106,6 +180,8 @@ class SessionDatabase:
         # Initialize schema using the context manager (ensures connection closed)
         with self._get_connection() as conn:
             self._ensure_schema(conn)
+            # Check for and perform any needed migrations
+            self._migrate_if_needed(conn)
 
     @contextmanager
     def _get_connection(self) -> sqlite3.Connection:
@@ -114,6 +190,8 @@ class SessionDatabase:
         """
         conn = sqlite3.connect(self.db_path, timeout=30)
         conn.row_factory = sqlite3.Row  # Enable column access by name
+        # Enable foreign key support for CASCADE DELETE
+        conn.execute("PRAGMA foreign_keys = ON")
         try:
             yield conn
         finally:
@@ -181,6 +259,139 @@ class SessionDatabase:
             except (OSError, PermissionError):
                 # Best effort - may fail if not owner
                 pass
+
+    def _get_schema_version(self, conn: sqlite3.Connection) -> int:
+        """
+        Get current schema version from database.
+
+        Returns:
+            int: Schema version (0 if no version table exists, i.e., V1 schema)
+        """
+        cursor = conn.cursor()
+
+        # Check if schema_version table exists
+        cursor.execute("""
+            SELECT name FROM sqlite_master
+            WHERE type='table' AND name='schema_version'
+        """)
+
+        if cursor.fetchone() is None:
+            # No version table means V1 schema (original)
+            return 1
+
+        # Get the highest version number
+        cursor.execute("SELECT MAX(version) FROM schema_version")
+        result = cursor.fetchone()
+
+        if result is None or result[0] is None:
+            return 1
+
+        return result[0]
+
+    def _set_schema_version(self, conn: sqlite3.Connection, version: int):
+        """Record schema version in database."""
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT OR REPLACE INTO schema_version (version, upgraded_at) VALUES (?, ?)",
+            (version, datetime.now().isoformat())
+        )
+        conn.commit()
+
+    def _backup_database(self) -> Optional[str]:
+        """
+        Create backup of database before migration.
+
+        Returns:
+            str: Path to backup file, or None if backup failed
+        """
+        if not os.path.exists(self.db_path):
+            return None
+
+        backup_path = f"{self.db_path}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+        try:
+            shutil.copy2(self.db_path, backup_path)
+            return backup_path
+        except (OSError, shutil.Error):
+            return None
+
+    def _migrate_if_needed(self, conn: sqlite3.Connection):
+        """
+        Check schema version and perform migrations if needed.
+
+        Automatically backs up database before any migration.
+        """
+        current_version = self._get_schema_version(conn)
+
+        if current_version >= SCHEMA_VERSION:
+            return  # Already up to date
+
+        # Backup before migration
+        backup_path = self._backup_database()
+
+        try:
+            if current_version < 2:
+                self._migrate_v1_to_v2(conn)
+
+            # Record successful migration
+            self._set_schema_version(conn, SCHEMA_VERSION)
+
+        except Exception as e:
+            # Migration failed - database may be in inconsistent state
+            # The backup is available for recovery
+            raise RuntimeError(
+                f"Database migration failed: {e}. "
+                f"Backup available at: {backup_path}"
+            ) from e
+
+    def _migrate_v1_to_v2(self, conn: sqlite3.Connection):
+        """
+        Migrate from V1 (sessions only) to V2 (context management).
+
+        Creates new tables and migrates existing history_json to messages table.
+        """
+        cursor = conn.cursor()
+
+        # Create V2 tables (schema_version, messages, file_references, compaction_history)
+        conn.executescript(self.SCHEMA_V2)
+
+        # Migrate existing history_json data to messages table
+        cursor.execute("""
+            SELECT session_id, history_json
+            FROM sessions
+            WHERE history_json IS NOT NULL AND history_json != ''
+        """)
+
+        for row in cursor.fetchall():
+            session_id = row[0]
+            history_json = row[1]
+
+            try:
+                history = json.loads(history_json)
+                if isinstance(history, list):
+                    for i, msg in enumerate(history):
+                        if isinstance(msg, dict) and 'role' in msg and 'content' in msg:
+                            # Estimate tokens (rough: 4 chars per token)
+                            content = msg.get('content', '')
+                            tokens = len(content) // 4
+
+                            cursor.execute("""
+                                INSERT INTO messages
+                                (session_id, role, content, tokens, timestamp, is_summary)
+                                VALUES (?, ?, ?, ?, ?, ?)
+                            """, (
+                                session_id,
+                                msg['role'],
+                                content,
+                                tokens,
+                                datetime.now().isoformat(),
+                                False
+                            ))
+            except (json.JSONDecodeError, TypeError, KeyError):
+                # Skip malformed history_json entries
+                pass
+
+        conn.commit()
 
     def create_session(self, session_data: Dict[str, Any]) -> str:
         """
@@ -388,3 +599,470 @@ class SessionDatabase:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) as count FROM sessions")
             return cursor.fetchone()["count"]
+
+    # =========================================================================
+    # V2 API: Message Management
+    # =========================================================================
+
+    def save_message(
+        self,
+        session_id: str,
+        role: str,
+        content: str,
+        tokens: int = 0,
+        is_summary: bool = False,
+        timestamp: Optional[str] = None
+    ) -> int:
+        """
+        Save a message to the structured messages table.
+
+        Args:
+            session_id: Session identifier
+            role: Message role ('user', 'assistant', 'system')
+            content: Message content
+            tokens: Token count for this message
+            is_summary: Whether this is a summary message
+            timestamp: ISO timestamp (default: now)
+
+        Returns:
+            int: Message ID
+        """
+        if timestamp is None:
+            timestamp = datetime.now().isoformat()
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO messages
+                (session_id, role, content, tokens, timestamp, is_summary)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (session_id, role, content, tokens, timestamp, is_summary))
+            conn.commit()
+            return cursor.lastrowid
+
+    def load_messages(
+        self,
+        session_id: str,
+        limit: Optional[int] = None,
+        include_summaries: bool = True
+    ) -> List[Dict[str, Any]]:
+        """
+        Load messages for a session.
+
+        Args:
+            session_id: Session identifier
+            limit: Maximum messages to return (newest first, then reversed)
+            include_summaries: Whether to include summary messages
+
+        Returns:
+            List of message dictionaries ordered by timestamp ascending
+        """
+        query = """
+            SELECT id, session_id, role, content, tokens, timestamp, is_summary
+            FROM messages
+            WHERE session_id = ?
+        """
+        params: List[Any] = [session_id]
+
+        if not include_summaries:
+            query += " AND is_summary = FALSE"
+
+        query += " ORDER BY timestamp ASC"
+
+        if limit is not None:
+            # Get newest N messages by using subquery
+            query = f"""
+                SELECT * FROM (
+                    SELECT id, session_id, role, content, tokens, timestamp, is_summary
+                    FROM messages
+                    WHERE session_id = ?
+                    {"AND is_summary = FALSE" if not include_summaries else ""}
+                    ORDER BY timestamp DESC
+                    LIMIT ?
+                ) ORDER BY timestamp ASC
+            """
+            params = [session_id, limit]
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_message_tokens(self, session_id: str) -> int:
+        """
+        Get total token count for a session's messages.
+
+        Args:
+            session_id: Session identifier
+
+        Returns:
+            int: Total tokens
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT COALESCE(SUM(tokens), 0) as total
+                FROM messages
+                WHERE session_id = ?
+            """, (session_id,))
+            return cursor.fetchone()["total"]
+
+    def delete_messages(self, message_ids: List[int]) -> int:
+        """
+        Delete specific messages by ID.
+
+        Args:
+            message_ids: List of message IDs to delete
+
+        Returns:
+            int: Number of messages deleted
+        """
+        if not message_ids:
+            return 0
+
+        placeholders = ",".join("?" * len(message_ids))
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"DELETE FROM messages WHERE id IN ({placeholders})",
+                message_ids
+            )
+            conn.commit()
+            return cursor.rowcount
+
+    def delete_messages_before(
+        self,
+        session_id: str,
+        before_timestamp: str,
+        keep_count: int = 0
+    ) -> int:
+        """
+        Delete messages before a timestamp, optionally keeping N newest.
+
+        Args:
+            session_id: Session identifier
+            before_timestamp: Delete messages before this ISO timestamp
+            keep_count: Number of newest messages to always keep
+
+        Returns:
+            int: Number of messages deleted
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+
+            if keep_count > 0:
+                # Get IDs of messages to keep
+                cursor.execute("""
+                    SELECT id FROM messages
+                    WHERE session_id = ?
+                    ORDER BY timestamp DESC
+                    LIMIT ?
+                """, (session_id, keep_count))
+                keep_ids = [row["id"] for row in cursor.fetchall()]
+
+                if keep_ids:
+                    placeholders = ",".join("?" * len(keep_ids))
+                    cursor.execute(f"""
+                        DELETE FROM messages
+                        WHERE session_id = ?
+                        AND timestamp < ?
+                        AND id NOT IN ({placeholders})
+                    """, [session_id, before_timestamp] + keep_ids)
+                else:
+                    cursor.execute("""
+                        DELETE FROM messages
+                        WHERE session_id = ? AND timestamp < ?
+                    """, (session_id, before_timestamp))
+            else:
+                cursor.execute("""
+                    DELETE FROM messages
+                    WHERE session_id = ? AND timestamp < ?
+                """, (session_id, before_timestamp))
+
+            conn.commit()
+            return cursor.rowcount
+
+    # =========================================================================
+    # V2 API: File Reference Tracking
+    # =========================================================================
+
+    def track_file_reference(
+        self,
+        message_id: int,
+        file_path: str,
+        mode: str,
+        tokens: int = 0
+    ) -> int:
+        """
+        Record a file reference in a message.
+
+        Args:
+            message_id: ID of the message containing the reference
+            file_path: Path to the referenced file
+            mode: Reference mode ('full', 'summary', 'extract', 'lines')
+            tokens: Token count for the file content
+
+        Returns:
+            int: File reference ID
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO file_references
+                (message_id, file_path, mode, tokens)
+                VALUES (?, ?, ?, ?)
+            """, (message_id, file_path, mode, tokens))
+            conn.commit()
+            return cursor.lastrowid
+
+    def get_file_references(
+        self,
+        session_id: str,
+        file_path: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Get file references for a session.
+
+        Args:
+            session_id: Session identifier
+            file_path: Optional filter by file path
+
+        Returns:
+            List of file reference dictionaries with message info
+        """
+        query = """
+            SELECT fr.id, fr.message_id, fr.file_path, fr.mode, fr.tokens,
+                   m.timestamp, m.role
+            FROM file_references fr
+            JOIN messages m ON fr.message_id = m.id
+            WHERE m.session_id = ?
+        """
+        params: List[Any] = [session_id]
+
+        if file_path is not None:
+            query += " AND fr.file_path = ?"
+            params.append(file_path)
+
+        query += " ORDER BY m.timestamp DESC"
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_stale_files(
+        self,
+        session_id: str,
+        stale_threshold: int = 3,
+        mode_filter: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Find files not referenced in recent messages.
+
+        Args:
+            session_id: Session identifier
+            stale_threshold: Number of recent messages to check
+            mode_filter: Optional filter by mode (e.g., 'full')
+
+        Returns:
+            List of stale file info dictionaries with:
+            - file_path: Path to the file
+            - mode: Last reference mode
+            - tokens: Tokens used
+            - last_message_id: ID of last message referencing this file
+            - messages_ago: How many messages since last reference
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Get recent message IDs
+            cursor.execute("""
+                SELECT id FROM messages
+                WHERE session_id = ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+            """, (session_id, stale_threshold))
+            recent_ids = [row["id"] for row in cursor.fetchall()]
+
+            if not recent_ids:
+                return []
+
+            # Get all unique files with their last reference
+            query = """
+                SELECT fr.file_path, fr.mode, fr.tokens, fr.message_id,
+                       (SELECT COUNT(*) FROM messages m2
+                        WHERE m2.session_id = ? AND m2.timestamp > m.timestamp) as messages_ago
+                FROM file_references fr
+                JOIN messages m ON fr.message_id = m.id
+                WHERE m.session_id = ?
+            """
+            params: List[Any] = [session_id, session_id]
+
+            if mode_filter:
+                query += " AND fr.mode = ?"
+                params.append(mode_filter)
+
+            query += """
+                GROUP BY fr.file_path
+                HAVING fr.message_id = MAX(fr.message_id)
+            """
+
+            cursor.execute(query, params)
+            all_files = [dict(row) for row in cursor.fetchall()]
+
+            # Filter to only stale files (not in recent messages)
+            recent_set = set(recent_ids)
+            stale = [
+                f for f in all_files
+                if f["message_id"] not in recent_set
+            ]
+
+            return stale
+
+    def update_file_reference_mode(
+        self,
+        file_ref_id: int,
+        new_mode: str,
+        new_tokens: int
+    ):
+        """
+        Update the mode and tokens for a file reference (for recompression).
+
+        Args:
+            file_ref_id: File reference ID
+            new_mode: New mode ('full' -> 'summary', etc.)
+            new_tokens: New token count
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE file_references
+                SET mode = ?, tokens = ?
+                WHERE id = ?
+            """, (new_mode, new_tokens, file_ref_id))
+            conn.commit()
+
+    # =========================================================================
+    # V2 API: Compaction History
+    # =========================================================================
+
+    def record_compaction(
+        self,
+        session_id: str,
+        level: int,
+        tokens_before: int,
+        tokens_after: int,
+        strategy: str,
+        details: Optional[str] = None
+    ) -> int:
+        """
+        Record a compaction event.
+
+        Args:
+            session_id: Session identifier
+            level: Compaction level (1=soft, 2=hard, 3=emergency)
+            tokens_before: Token count before compaction
+            tokens_after: Token count after compaction
+            strategy: Strategy used ('file_compress', 'message_prune', 'llm_summary')
+            details: Optional JSON string with additional details
+
+        Returns:
+            int: Compaction history ID
+        """
+        tokens_freed = tokens_before - tokens_after
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO compaction_history
+                (session_id, timestamp, level, tokens_before, tokens_after,
+                 tokens_freed, strategy, details)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                session_id,
+                datetime.now().isoformat(),
+                level,
+                tokens_before,
+                tokens_after,
+                tokens_freed,
+                strategy,
+                details
+            ))
+            conn.commit()
+            return cursor.lastrowid
+
+    def get_compaction_history(
+        self,
+        session_id: str,
+        limit: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Get compaction history for a session.
+
+        Args:
+            session_id: Session identifier
+            limit: Maximum records to return
+
+        Returns:
+            List of compaction history dictionaries
+        """
+        query = """
+            SELECT id, session_id, timestamp, level, tokens_before,
+                   tokens_after, tokens_freed, strategy, details
+            FROM compaction_history
+            WHERE session_id = ?
+            ORDER BY timestamp DESC
+        """
+        params: List[Any] = [session_id]
+
+        if limit is not None:
+            query += " LIMIT ?"
+            params.append(limit)
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_total_tokens_freed(self, session_id: str) -> int:
+        """
+        Get total tokens freed by compaction for a session.
+
+        Args:
+            session_id: Session identifier
+
+        Returns:
+            int: Total tokens freed
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT COALESCE(SUM(tokens_freed), 0) as total
+                FROM compaction_history
+                WHERE session_id = ?
+            """, (session_id,))
+            return cursor.fetchone()["total"]
+
+    def get_last_compaction(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get the most recent compaction event for a session.
+
+        Args:
+            session_id: Session identifier
+
+        Returns:
+            Compaction history dict, or None if no compactions
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, session_id, timestamp, level, tokens_before,
+                       tokens_after, tokens_freed, strategy, details
+                FROM compaction_history
+                WHERE session_id = ?
+                ORDER BY timestamp DESC
+                LIMIT 1
+            """, (session_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
