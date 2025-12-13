@@ -68,8 +68,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `tests/test_file_chunker.py` with 30 tests
 - Added `tests/test_session_db_v2.py` with 38 tests
 - Added `tests/test_context_manager.py` with 33 tests
-- Added `tests/test_vector_embedder.py` with 36 tests
-- 204 tests passing, 7 skipped
+- Added `tests/test_vector_embedder.py` with 42 tests
+- Added `tests/test_model_manifest.py` with 21 tests
+- Added `tests/test_model_scanner.py` with 19 tests
+- 265 tests passing, 7 skipped
 
 ### Database Schema (In Progress)
 

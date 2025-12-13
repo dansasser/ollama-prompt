@@ -63,12 +63,12 @@ class ContextManager:
     def check_compaction_needed(self) -> int:
         """
         Check if compaction is needed and return level.
-        
+
         Returns:
             0: No compaction needed
-            1: Soft compaction (60-75%)
-            2: Hard compaction (75-90%)
-            3: Emergency compaction (>90%)
+            1: Soft compaction (50-65%)
+            2: Hard compaction (65-80%)
+            3: Emergency compaction (>80%)
         """
         usage = self.current_tokens / self.max_tokens
         
@@ -393,17 +393,17 @@ def add_message(self, role: str, content: str) -> None:
     level = self.check_compaction_needed()
     
     if level == 1:
-        print("[Context Manager] Soft compaction triggered (60% full)")
+        print("[Context Manager] Soft compaction triggered (50% full)")
         freed = self.soft_compact()
         print(f"[Context Manager] Freed {freed} tokens")
-        
+
     elif level == 2:
-        print("[Context Manager] Hard compaction triggered (75% full)")
+        print("[Context Manager] Hard compaction triggered (65% full)")
         freed = self.hard_compact()
         print(f"[Context Manager] Freed {freed} tokens")
-        
+
     elif level == 3:
-        print("[Context Manager] EMERGENCY compaction triggered (90% full)")
+        print("[Context Manager] EMERGENCY compaction triggered (80% full)")
         freed = self.emergency_compact()
         print(f"[Context Manager] Freed {freed} tokens")
         
@@ -558,7 +558,7 @@ Compaction Metrics:
 1. **Implement Level 1 (Soft Compaction)** first - highest ROI, lowest risk
 2. **Test with real conversations** - measure token savings and information loss
 3. **Add user feedback mechanism** - let users report when compaction loses important context
-4. **Tune thresholds** - adjust 60/75/90% triggers based on actual usage
+4. **Tune thresholds** - adjust 50/65/80% triggers based on actual usage
 5. **Implement Levels 2 and 3** once Level 1 proves stable
 
 Would you like me to implement the ContextManager class with Level 1 compaction for you?

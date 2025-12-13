@@ -372,7 +372,9 @@ def expand_file_refs_in_prompt(prompt, repo_root=".", max_bytes=DEFAULT_MAX_FILE
 
             # Extract lines
             res = chunker.extract_lines(file_res["content"], start_line, end_line, path)
-            label = f"FILE: {path} (lines {start_line}-{end_line})"
+            # Use actual clamped range from result, not original request
+            actual_range = res.get('lines', f"{start_line}-{end_line}")
+            label = f"FILE: {path} (lines {actual_range})"
 
         # Handle :full mode (explicit full content)
         elif full_ref.endswith(":full"):
@@ -572,6 +574,23 @@ def main():
     # Argument validation
     if args.session_id and args.no_session:
         parser.error("--session-id and --no-session are mutually exclusive")
+
+    # Validate --set-*-model inputs
+    model_setters = {
+        '--set-embedding-model': args.set_embedding_model,
+        '--set-vision-model': args.set_vision_model,
+        '--set-code-model': args.set_code_model,
+        '--set-reasoning-model': args.set_reasoning_model,
+        '--set-general-model': args.set_general_model,
+    }
+    for flag, value in model_setters.items():
+        if value is not None:
+            # Check for empty or whitespace-only values
+            if not value.strip():
+                parser.error(f"{flag} requires a non-empty model name")
+            # Check for basic valid model name format (alphanumeric, colons, dashes, dots, underscores)
+            if not re.match(r'^[a-zA-Z0-9][a-zA-Z0-9:.\-_]*$', value):
+                parser.error(f"{flag} value '{value}' contains invalid characters. Model names should contain only alphanumeric characters, colons, dashes, dots, and underscores.")
 
     # Check if model configuration command was requested
     model_commands = [

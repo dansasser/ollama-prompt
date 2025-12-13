@@ -126,51 +126,14 @@ cm.add_message('user', 'How does password hashing work?')
    - After: 2KB (500 tokens)
    - **Tokens freed: 10,750**
 
-8. **New state:**
-   - Tokens: 10,000 - 10,750 = -750 (wait, this doesn't make sense...)
-   - Actually: We're removing tokens from the file content in message 5
-   - New total: 10,000 - 10,750 + 500 = -250... 
-   
-   Let me recalculate properly:
-   - Original message 5 had: 11,250 tokens (file content)
-   - After compression: 500 tokens
-   - Tokens freed from message 5: 10,750
-   - Current total was: 10,000 (includes the 11,250 from message 5)
-   - New total: 10,000 - 10,750 = -750 (negative!)
-   
-   Actually, the current_tokens already includes all messages, so:
-   - Current: 10,000 tokens
-   - We're replacing 11,250 tokens with 500 tokens in message 5
-   - Freed: 10,750 tokens
-   - New total: 10,000 - 10,750 = -750
-   
-   Wait, that's still wrong. Let me think about this correctly:
-   
-   - Total tokens before message 21: 8,000
-   - Message 21 adds: 2,000 tokens
-   - Total after message 21: 10,000 tokens
-   - This 10,000 includes the old file content (11,250 tokens) in message 5
-   - We compress message 5's content: 11,250 → 500
-   - Tokens saved: 10,750
-   - New total: 10,000 - 10,750 = -750
-   
-   I'm confusing myself. Let me restart:
-   
-   **Correct calculation:**
-   - Before message 21: 8,000 tokens total (includes message 5 with 11,250 token file)
-   - Message 21 adds: 2,000 tokens
-   - After message 21: 10,000 tokens (62.5% full)
-   - Compaction triggered
-   - Message 5's file content (11,250 tokens) compressed to 500 tokens
+8. **New state after compaction:**
+   - File compressed: 11,250 → 500 tokens
    - Tokens freed: 10,750
-   - New total: 10,000 - 10,750 = -750 (WRONG!)
-   
-   The issue is that the 8,000 tokens before message 21 already includes the 11,250 from message 5. So when we compress it, we should get:
-   - New total: 10,000 - (11,250 - 500) = 10,000 - 10,750 = -750
-   
-   This is still negative, which means my example numbers are wrong. Let me fix:
+   - New total: Below soft threshold
 
-**Corrected Example:**
+---
+
+## Example 2: Hard Compaction with Relevance Scoring
 
 **Initial State:**
 - Messages: 20

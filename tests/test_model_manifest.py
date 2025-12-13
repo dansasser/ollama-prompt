@@ -2,6 +2,7 @@
 """Tests for ModelManifest module."""
 
 import json
+import os
 import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -14,12 +15,25 @@ class TestManifestInit:
 
     def test_default_path_windows(self, tmp_path, monkeypatch):
         """Test default path on Windows."""
-        monkeypatch.setattr("os.name", "nt")
+        # Patch os.name at the module level where it's used
+        monkeypatch.setattr("ollama_prompt.model_manifest.os.name", "nt")
         monkeypatch.setenv("APPDATA", str(tmp_path))
 
         manifest = ModelManifest()
         assert "ollama-prompt" in str(manifest.path)
         assert "model-manifest.json" in str(manifest.path)
+
+    def test_default_path_unix(self, tmp_path, monkeypatch):
+        """Test default path on Unix/Linux/Mac."""
+        # Patch os.name at the module level where it's used
+        monkeypatch.setattr("ollama_prompt.model_manifest.os.name", "posix")
+        # Patch Path.home() to use tmp_path
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+        manifest = ModelManifest()
+        assert "ollama-prompt" in str(manifest.path)
+        assert "model-manifest.json" in str(manifest.path)
+        assert ".config" in str(manifest.path)
 
     def test_custom_path(self, tmp_path):
         """Test custom manifest path."""

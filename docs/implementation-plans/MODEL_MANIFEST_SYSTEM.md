@@ -23,7 +23,10 @@ ollama-prompt needs a model management system to:
 
 ## Manifest File
 
-**Location:** `~/.config/ollama-prompt/model-manifest.json`
+**Location (cross-platform):**
+- **Windows:** `%APPDATA%\ollama-prompt\model-manifest.json`
+- **macOS:** `~/Library/Application Support/ollama-prompt/model-manifest.json`
+- **Linux:** `~/.config/ollama-prompt/model-manifest.json`
 
 **Schema:**
 ```json
@@ -84,7 +87,7 @@ ollama-prompt --scan-models
 #   - deepseek-v3.2:cloud: code, reasoning, security, performance
 #   - nomic-embed-text: embedding
 #   - qwen3-next:80b-cloud: vision, code, reasoning
-# Manifest saved to ~/.config/ollama-prompt/model-manifest.json
+# Manifest saved to platform-specific config directory
 ```
 
 ### Setting Task Models
@@ -246,7 +249,7 @@ def __init__(self, db_path=None, manifest=None):
 
 ## First Run Behavior
 
-1. Check if manifest exists at `~/.config/ollama-prompt/model-manifest.json`
+1. Check if manifest exists in platform-specific config directory
 2. If not, auto-run scan:
    - Call `ollama list`
    - Detect capabilities for each model
@@ -266,7 +269,7 @@ This allows users who have the Claude plugin to benefit from its model scanning,
 
 ## File Structure After Implementation
 
-```
+```text
 ollama_prompt/
   __init__.py
   cli.py                    # Add model management flags
