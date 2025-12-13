@@ -42,23 +42,28 @@ These plans were developed to transform `ollama-prompt` from a CLI tool into a f
    - Automatic triggering based on usage thresholds
    - Graduated strategies from rule-based to LLM-based
 
-7. **[database_upgrade_strategy.md](./database_upgrade_strategy.md)**
+7. **[MODEL_MANIFEST_SYSTEM.md](./MODEL_MANIFEST_SYSTEM.md)**
+   - Model discovery and capability detection
+   - Task-based model assignment (embedding, vision, code, reasoning)
+   - Manifest storage and CLI integration
+
+8. **[database_upgrade_strategy.md](./database_upgrade_strategy.md)**
    - Schema upgrade from V1 (JSON blobs) to V2 (structured tables)
    - Six tables: sessions, messages, file_references, file_chunks, embeddings, compaction_history
    - Automatic migration with zero data loss
 
 ### Supporting Documents
 
-8. **[decision_flow.md](./decision_flow.md)**
+9. **[decision_flow.md](./decision_flow.md)**
    - Visual decision flow for automatic context compaction
    - Shows how the system chooses between Level 1, 2, and 3 compaction
 
-9. **[article_analysis.md](./article_analysis.md)**
-   - Analysis of Manus team's context engineering article
-   - Validation of our design decisions
-   - Recommendation to lower compaction thresholds
+10. **[article_analysis.md](./article_analysis.md)**
+    - Analysis of Manus team's context engineering article
+    - Validation of our design decisions
+    - Recommendation to lower compaction thresholds
 
-10. **[context_manager_implementation.py](./context_manager_implementation.py)**
+11. **[context_manager_implementation.py](./context_manager_implementation.py)**
     - Complete working implementation of the automatic context manager
     - Production-ready code with all three compaction levels
     - Can be integrated directly into the codebase

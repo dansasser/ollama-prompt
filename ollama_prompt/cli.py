@@ -522,11 +522,71 @@ def main():
         help="Show details for session ID and exit",
     )
 
+    # Model configuration flags
+    model_group = parser.add_argument_group(
+        "model configuration", "Manage model assignments for different task types"
+    )
+    model_group.add_argument(
+        "--scan-models",
+        action="store_true",
+        help="Scan available Ollama models and update manifest",
+    )
+    model_group.add_argument(
+        "--show-models",
+        action="store_true",
+        help="Show current model assignments and exit",
+    )
+    model_group.add_argument(
+        "--set-embedding-model",
+        type=str,
+        metavar="MODEL",
+        help="Set the embedding model for semantic scoring",
+    )
+    model_group.add_argument(
+        "--set-vision-model",
+        type=str,
+        metavar="MODEL",
+        help="Set the vision model for image analysis",
+    )
+    model_group.add_argument(
+        "--set-code-model",
+        type=str,
+        metavar="MODEL",
+        help="Set the code model for code analysis",
+    )
+    model_group.add_argument(
+        "--set-reasoning-model",
+        type=str,
+        metavar="MODEL",
+        help="Set the reasoning model for complex analysis",
+    )
+    model_group.add_argument(
+        "--set-general-model",
+        type=str,
+        metavar="MODEL",
+        help="Set the general purpose model",
+    )
+
     args = parser.parse_args()
 
     # Argument validation
     if args.session_id and args.no_session:
         parser.error("--session-id and --no-session are mutually exclusive")
+
+    # Check if model configuration command was requested
+    model_commands = [
+        args.scan_models,
+        args.show_models,
+        args.set_embedding_model,
+        args.set_vision_model,
+        args.set_code_model,
+        args.set_reasoning_model,
+        args.set_general_model,
+    ]
+    if any(model_commands):
+        from .model_utils import handle_model_command
+        handle_model_command(args)
+        return
 
     # Check if utility command was requested
     utility_commands = [args.list_sessions, args.purge, args.session_info]

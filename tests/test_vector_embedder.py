@@ -33,6 +33,109 @@ class TestVectorEmbedderInit:
         embedder = VectorEmbedder(ollama_host="http://myhost:11434")
         assert embedder.ollama_host == "http://myhost:11434"
 
+    def test_init_with_fallback_model(self):
+        """Test initialization with fallback model."""
+        embedder = VectorEmbedder(
+            model="nomic-embed-text",
+            fallback_model="llama3:8b"
+        )
+        assert embedder.model == "nomic-embed-text"
+        assert embedder.fallback_model == "llama3:8b"
+
+
+class TestFromManifest:
+    """Test VectorEmbedder.from_manifest class method."""
+
+    def test_from_manifest_with_embedding_model(self, tmp_path):
+        """Test creating embedder from manifest with embedding model."""
+        from ollama_prompt.model_manifest import ModelManifest
+
+        manifest = ModelManifest(path=tmp_path / "manifest.json")
+        manifest.load()
+        manifest.set_model_for_task("embedding", "mxbai-embed-large")
+
+        embedder = VectorEmbedder.from_manifest(manifest)
+        assert embedder.model == "mxbai-embed-large"
+
+    def test_from_manifest_with_no_embedding_model(self, tmp_path):
+        """Test creating embedder from manifest without embedding model."""
+        from ollama_prompt.model_manifest import ModelManifest
+
+        manifest = ModelManifest(path=tmp_path / "manifest.json")
+        manifest.load()
+        # Don't set an embedding model
+
+        embedder = VectorEmbedder.from_manifest(manifest)
+        # Should fall back to default
+        assert embedder.model == VectorEmbedder.DEFAULT_MODEL
+
+    def test_from_manifest_with_fallback(self, tmp_path):
+        """Test creating embedder from manifest with fallback model."""
+        from ollama_prompt.model_manifest import ModelManifest
+
+        manifest = ModelManifest(path=tmp_path / "manifest.json")
+        manifest.load()
+        manifest.set_model_for_task("embedding", "nomic-embed-text")
+
+        embedder = VectorEmbedder.from_manifest(
+            manifest,
+            fallback_model="llama3:8b"
+        )
+        assert embedder.model == "nomic-embed-text"
+        assert embedder.fallback_model == "llama3:8b"
+
+
+class TestFallbackBehavior:
+    """Test fallback model behavior."""
+
+    def test_embed_tries_fallback_on_primary_failure(self):
+        """Test that embed tries fallback when primary fails."""
+        embedder = VectorEmbedder(
+            model="nonexistent-model",
+            fallback_model="backup-model"
+        )
+
+        # Mock _try_embed to fail on primary, succeed on fallback
+        call_count = {"count": 0}
+        original_try_embed = embedder._try_embed
+
+        def mock_try_embed(text, model):
+            call_count["count"] += 1
+            if model == "nonexistent-model":
+                return None  # Primary fails
+            elif model == "backup-model":
+                return [0.1, 0.2, 0.3]  # Fallback succeeds
+            return original_try_embed(text, model)
+
+        embedder._try_embed = mock_try_embed
+
+        result = embedder.embed("test text", use_cache=False)
+
+        assert result == [0.1, 0.2, 0.3]
+        assert call_count["count"] == 2  # Tried both
+
+    def test_embed_no_fallback_when_primary_succeeds(self):
+        """Test that fallback isn't called when primary succeeds."""
+        embedder = VectorEmbedder(
+            model="primary-model",
+            fallback_model="backup-model"
+        )
+
+        call_count = {"count": 0}
+
+        def mock_try_embed(text, model):
+            call_count["count"] += 1
+            if model == "primary-model":
+                return [0.5, 0.6, 0.7]
+            return None
+
+        embedder._try_embed = mock_try_embed
+
+        result = embedder.embed("test text", use_cache=False)
+
+        assert result == [0.5, 0.6, 0.7]
+        assert call_count["count"] == 1  # Only tried primary
+
 
 class TestCacheKey:
     """Test cache key generation."""

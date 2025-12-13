@@ -8,15 +8,20 @@ Handles:
 - JSON message storage with dual caching
 - Smart context pruning when approaching token limits
 - Session updates after each exchange
+- Optional smart compaction via ContextManager
 """
 import json
 import os
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 from .models import SessionData
 from .session_db import SessionDatabase
+
+if TYPE_CHECKING:
+    from .context_manager import ContextManager
+    from .model_manifest import ModelManifest
 
 # Resource limits to prevent exhaustion attacks
 MAX_SESSIONS = 1000  # Maximum total sessions allowed
@@ -35,16 +40,32 @@ class SessionManager:
     - Context preparation with pruning
     - Session updates with JSON message storage
     - Dual storage: JSON in history_json + cached plain text in context
+    - Optional smart compaction via ContextManager (when use_smart_compaction=True)
     """
 
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(
+        self,
+        db_path: Optional[str] = None,
+        use_smart_compaction: bool = False,
+        manifest: Optional["ModelManifest"] = None,
+        fallback_model: Optional[str] = None
+    ):
         """
         Initialize SessionManager with database.
 
         Args:
             db_path: Path to database file (optional, uses default if not provided)
+            use_smart_compaction: Enable ContextManager for smart compaction
+            manifest: Optional ModelManifest for embedding model selection
+            fallback_model: Optional fallback model for embeddings (e.g., user's chat model)
         """
         self.db = SessionDatabase(db_path)
+        self.use_smart_compaction = use_smart_compaction
+        self.manifest = manifest
+        self.fallback_model = fallback_model
+
+        # Context managers per session (lazy initialized)
+        self._context_managers: Dict[str, "ContextManager"] = {}
 
     def get_or_create_session(
         self,
@@ -381,6 +402,94 @@ class SessionManager:
 
         return "\n\n".join(context_lines)
 
+    def _get_context_manager(self, session: Dict[str, Any]) -> Optional["ContextManager"]:
+        """
+        Get or create ContextManager for a session.
+
+        Args:
+            session: Session dictionary
+
+        Returns:
+            ContextManager instance, or None if smart compaction disabled
+        """
+        if not self.use_smart_compaction:
+            return None
+
+        session_id = session["session_id"]
+
+        if session_id not in self._context_managers:
+            from .context_manager import ContextManager
+            from .vector_embedder import VectorEmbedder
+
+            # Create embedder with manifest if available
+            embedder = None
+            if self.manifest:
+                embedder = VectorEmbedder.from_manifest(
+                    self.manifest,
+                    fallback_model=self.fallback_model
+                )
+            elif self.fallback_model:
+                embedder = VectorEmbedder(fallback_model=self.fallback_model)
+
+            max_tokens = session.get("max_context_tokens", 64000)
+
+            self._context_managers[session_id] = ContextManager(
+                db=self.db,
+                session_id=session_id,
+                max_tokens=max_tokens,
+                vector_embedder=embedder,
+                use_vector_scoring=embedder is not None
+            )
+
+        return self._context_managers[session_id]
+
+    def get_context_status(self, session: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Get context manager status for a session.
+
+        Args:
+            session: Session dictionary
+
+        Returns:
+            Status dict from ContextManager, or None if not using smart compaction
+        """
+        ctx_manager = self._get_context_manager(session)
+        if ctx_manager:
+            return ctx_manager.get_status()
+        return None
+
+    def get_compaction_stats(self, session: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Get compaction statistics for a session.
+
+        Args:
+            session: Session dictionary
+
+        Returns:
+            Stats dict from ContextManager, or None if not using smart compaction
+        """
+        ctx_manager = self._get_context_manager(session)
+        if ctx_manager:
+            return ctx_manager.get_compaction_stats()
+        return None
+
+    def force_compact(self, session: Dict[str, Any], level: int = 1) -> int:
+        """
+        Force compaction on a session.
+
+        Args:
+            session: Session dictionary
+            level: Compaction level (1=soft, 2=hard, 3=emergency)
+
+        Returns:
+            Tokens freed, or 0 if not using smart compaction
+        """
+        ctx_manager = self._get_context_manager(session)
+        if ctx_manager:
+            return ctx_manager.force_compact(level)
+        return 0
+
     def close(self):
-        """Close database connection."""
+        """Close database connection and clean up context managers."""
+        self._context_managers.clear()
         self.db.close()

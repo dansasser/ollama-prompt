@@ -2,26 +2,44 @@
 """
 Vector Embedder for semantic relevance scoring.
 
-Uses Ollama's embedding models (nomic-embed-text by default) to generate
-vector embeddings for semantic similarity comparisons.
+Uses Ollama's embedding models to generate vector embeddings for
+semantic similarity comparisons.
+
+Model selection priority:
+1. Explicitly provided model parameter
+2. Model from manifest (configured via --set-embedding-model)
+3. User's chat model (may support embeddings)
+4. Falls back to keyword-based scoring if no embedding model available
 """
 
 import hashlib
 import json
 import subprocess
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union, TYPE_CHECKING
 import math
+
+if TYPE_CHECKING:
+    from ollama_prompt.model_manifest import ModelManifest
 
 
 class VectorEmbedder:
     """
     Generate and compare vector embeddings using Ollama.
 
-    Uses nomic-embed-text model by default for high-quality embeddings.
-    Supports caching to avoid regenerating embeddings for unchanged content.
+    Model selection follows this priority:
+    1. Explicitly provided model parameter
+    2. Embedding model from manifest (set via --set-embedding-model)
+    3. Fallback model (e.g., user's chat model)
+    4. None (caller should fall back to keyword scoring)
 
     Usage:
-        embedder = VectorEmbedder()
+        # With manifest (recommended)
+        from ollama_prompt.model_manifest import ModelManifest
+        manifest = ModelManifest()
+        embedder = VectorEmbedder.from_manifest(manifest)
+
+        # Direct usage
+        embedder = VectorEmbedder(model="nomic-embed-text")
         emb1 = embedder.embed("Hello world")
         emb2 = embedder.embed("Hi there")
         similarity = embedder.cosine_similarity(emb1, emb2)
@@ -31,22 +49,54 @@ class VectorEmbedder:
 
     def __init__(
         self,
-        model: str = DEFAULT_MODEL,
+        model: Optional[str] = None,
         cache: Optional[Dict[str, List[float]]] = None,
-        ollama_host: Optional[str] = None
+        ollama_host: Optional[str] = None,
+        fallback_model: Optional[str] = None
     ):
         """
         Initialize vector embedder.
 
         Args:
-            model: Ollama embedding model name
+            model: Ollama embedding model name (if None, uses DEFAULT_MODEL)
             cache: Optional dict for embedding cache (key: content hash, value: embedding)
             ollama_host: Optional Ollama API host (default: http://localhost:11434)
+            fallback_model: Model to try if primary model fails (e.g., chat model)
         """
-        self.model = model
+        self.model = model or self.DEFAULT_MODEL
+        self.fallback_model = fallback_model
         self.cache = cache if cache is not None else {}
         self.ollama_host = ollama_host or "http://localhost:11434"
         self._model_available: Optional[bool] = None
+        self._fallback_available: Optional[bool] = None
+
+    @classmethod
+    def from_manifest(
+        cls,
+        manifest: "ModelManifest",
+        fallback_model: Optional[str] = None,
+        cache: Optional[Dict[str, List[float]]] = None,
+        ollama_host: Optional[str] = None
+    ) -> "VectorEmbedder":
+        """
+        Create VectorEmbedder using model from manifest.
+
+        Args:
+            manifest: ModelManifest instance
+            fallback_model: Model to try if manifest model fails
+            cache: Optional embedding cache
+            ollama_host: Optional Ollama API host
+
+        Returns:
+            VectorEmbedder configured with manifest's embedding model
+        """
+        embedding_model = manifest.get_embedding_model()
+        return cls(
+            model=embedding_model,
+            fallback_model=fallback_model,
+            cache=cache,
+            ollama_host=ollama_host
+        )
 
     def _get_cache_key(self, text: str) -> str:
         """
@@ -63,31 +113,83 @@ class VectorEmbedder:
 
     def is_available(self) -> bool:
         """
-        Check if embedding model is available.
+        Check if embedding model (or fallback) is available.
 
         Returns:
-            bool: True if model is available via Ollama
+            bool: True if primary or fallback model is available via Ollama
         """
         if self._model_available is not None:
             return self._model_available
 
         try:
-            # Try to get a simple embedding to test availability
             result = subprocess.run(
                 ["ollama", "list"],
                 capture_output=True,
                 text=True,
                 timeout=10
             )
-            self._model_available = self.model in result.stdout
-            return self._model_available
+            available_models = result.stdout
+
+            # Check primary model
+            if self.model and self.model in available_models:
+                self._model_available = True
+                return True
+
+            # Check fallback model
+            if self.fallback_model and self.fallback_model in available_models:
+                self._fallback_available = True
+                self._model_available = True  # We have at least one option
+                return True
+
+            self._model_available = False
+            return False
+
         except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
             self._model_available = False
             return False
 
+    def get_active_model(self) -> Optional[str]:
+        """
+        Get the model that will be used for embeddings.
+
+        Checks availability and returns the first available model
+        in priority order: primary model, fallback model, None.
+
+        Returns:
+            Model name that will be used, or None if no model available
+        """
+        if not self.is_available():
+            return None
+
+        # If primary is available, use it
+        if self._model_available and not self._fallback_available:
+            return self.model
+
+        # Check which one is actually available
+        try:
+            result = subprocess.run(
+                ["ollama", "list"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            available = result.stdout
+
+            if self.model and self.model in available:
+                return self.model
+            if self.fallback_model and self.fallback_model in available:
+                return self.fallback_model
+
+        except Exception:
+            pass
+
+        return None
+
     def embed(self, text: str, use_cache: bool = True) -> Optional[List[float]]:
         """
         Generate embedding vector for text.
+
+        Tries primary model first, then fallback model if primary fails.
 
         Args:
             text: Text to embed
@@ -105,14 +207,41 @@ class VectorEmbedder:
             if cache_key in self.cache:
                 return self.cache[cache_key]
 
-        # Generate embedding via Ollama API
+        # Try primary model first
+        embedding = self._try_embed(text, self.model)
+
+        # If primary failed and we have a fallback, try it
+        if embedding is None and self.fallback_model:
+            embedding = self._try_embed(text, self.fallback_model)
+
+        # Cache successful embedding
+        if embedding and use_cache:
+            cache_key = self._get_cache_key(text)
+            self.cache[cache_key] = embedding
+
+        return embedding
+
+    def _try_embed(self, text: str, model: str) -> Optional[List[float]]:
+        """
+        Try to generate embedding with a specific model.
+
+        Args:
+            text: Text to embed
+            model: Model name to use
+
+        Returns:
+            Embedding vector or None if failed
+        """
+        if not model:
+            return None
+
         try:
             import urllib.request
             import urllib.error
 
             url = f"{self.ollama_host}/api/embeddings"
             data = json.dumps({
-                "model": self.model,
+                "model": model,
                 "prompt": text
             }).encode('utf-8')
 
@@ -124,13 +253,7 @@ class VectorEmbedder:
 
             with urllib.request.urlopen(req, timeout=30) as response:
                 result = json.loads(response.read().decode('utf-8'))
-                embedding = result.get("embedding")
-
-                if embedding and use_cache:
-                    cache_key = self._get_cache_key(text)
-                    self.cache[cache_key] = embedding
-
-                return embedding
+                return result.get("embedding")
 
         except (urllib.error.URLError, json.JSONDecodeError, KeyError, Exception):
             return None
