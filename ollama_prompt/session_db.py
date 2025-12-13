@@ -680,7 +680,9 @@ class SessionDatabase:
         if not include_summaries:
             query += " AND is_summary = FALSE"
 
-        query += " ORDER BY timestamp ASC"
+        # Use id for ordering (not timestamp) - id is auto-increment and
+        # guarantees insertion order even when timestamps have same value
+        query += " ORDER BY id ASC"
 
         if limit is not None:
             # Get newest N messages by using subquery
@@ -690,9 +692,9 @@ class SessionDatabase:
                     FROM messages
                     WHERE session_id = ?
                     {"AND is_summary = FALSE" if not include_summaries else ""}
-                    ORDER BY timestamp DESC
+                    ORDER BY id DESC
                     LIMIT ?
-                ) ORDER BY timestamp ASC
+                ) ORDER BY id ASC
             """
             params = [session_id, limit]
 
@@ -765,11 +767,11 @@ class SessionDatabase:
             cursor = conn.cursor()
 
             if keep_count > 0:
-                # Get IDs of messages to keep
+                # Get IDs of messages to keep (use id for stable ordering)
                 cursor.execute("""
                     SELECT id FROM messages
                     WHERE session_id = ?
-                    ORDER BY timestamp DESC
+                    ORDER BY id DESC
                     LIMIT ?
                 """, (session_id, keep_count))
                 keep_ids = [row["id"] for row in cursor.fetchall()]
@@ -889,11 +891,11 @@ class SessionDatabase:
         with self._get_connection() as conn:
             cursor = conn.cursor()
 
-            # Get recent message IDs
+            # Get recent message IDs (use id for stable ordering)
             cursor.execute("""
                 SELECT id FROM messages
                 WHERE session_id = ?
-                ORDER BY timestamp DESC
+                ORDER BY id DESC
                 LIMIT ?
             """, (session_id, stale_threshold))
             recent_ids = [row["id"] for row in cursor.fetchall()]
@@ -902,10 +904,11 @@ class SessionDatabase:
                 return []
 
             # Get all unique files with their last reference
+            # Use id for comparison (stable ordering even with same-second timestamps)
             query = """
                 SELECT fr.file_path, fr.mode, fr.tokens, fr.message_id,
                        (SELECT COUNT(*) FROM messages m2
-                        WHERE m2.session_id = ? AND m2.timestamp > m.timestamp) as messages_ago
+                        WHERE m2.session_id = ? AND m2.id > m.id) as messages_ago
                 FROM file_references fr
                 JOIN messages m ON fr.message_id = m.id
                 WHERE m.session_id = ?
@@ -1020,12 +1023,13 @@ class SessionDatabase:
         Returns:
             List of compaction history dictionaries
         """
+        # Use id for ordering (stable even with same-second timestamps)
         query = """
             SELECT id, session_id, timestamp, level, tokens_before,
                    tokens_after, tokens_freed, strategy, details
             FROM compaction_history
             WHERE session_id = ?
-            ORDER BY timestamp DESC
+            ORDER BY id DESC
         """
         params: List[Any] = [session_id]
 
@@ -1069,12 +1073,13 @@ class SessionDatabase:
         """
         with self._get_connection() as conn:
             cursor = conn.cursor()
+            # Use id for ordering (stable even with same-second timestamps)
             cursor.execute("""
                 SELECT id, session_id, timestamp, level, tokens_before,
                        tokens_after, tokens_freed, strategy, details
                 FROM compaction_history
                 WHERE session_id = ?
-                ORDER BY timestamp DESC
+                ORDER BY id DESC
                 LIMIT 1
             """, (session_id,))
             row = cursor.fetchone()
