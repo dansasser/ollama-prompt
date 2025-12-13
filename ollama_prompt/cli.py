@@ -10,6 +10,7 @@ import ollama
 # Now using llm-filesystem-tools package for production-ready security
 from llm_fs_tools import (DEFAULT_MAX_FILE_BYTES, create_directory_tools,
                           read_file_secure)
+from ollama_prompt.file_chunker import FileChunker
 
 # Maximum prompt size to prevent ReDoS and resource exhaustion
 MAX_PROMPT_SIZE = 10_000_000  # 10MB
@@ -288,8 +289,11 @@ def expand_file_refs_in_prompt(prompt, repo_root=".", max_bytes=DEFAULT_MAX_FILE
     with contents wrapped in clear delimiters.
 
     File syntax:
-    - @./path/to/file.py - Read file contents
-    - @src/foo.py - Read file contents
+    - @./path/to/file.py - Auto-summary for files >5KB, full for smaller
+    - @./path/to/file.py:full - Always full content
+    - @./path/to/file.py:summary - Force summary mode
+    - @./path/to/file.py:function_name - Extract specific function/class
+    - @./path/to/file.py:lines:100-150 - Extract line range
 
     Directory syntax:
     - @./dir/ or @./dir/:list - List directory contents
@@ -309,8 +313,11 @@ def expand_file_refs_in_prompt(prompt, repo_root=".", max_bytes=DEFAULT_MAX_FILE
             f"Prompt too large: {len(prompt)} bytes (maximum {MAX_PROMPT_SIZE} bytes)"
         )
 
+    # Initialize FileChunker for smart summarization
+    chunker = FileChunker()
+
     # Pattern matches: @./ or @../ or @/ followed by valid path characters
-    # Now also captures optional :command:arg suffixes for directory operations
+    # Now also captures optional :command:arg suffixes for file/directory operations
     # Excludes: whitespace, @, and common sentence-ending punctuation (?!,;)
     pattern = re.compile(r"@((?:\.\.?[/\\]|[/\\])[^\s@?!,;]+)")
 
@@ -344,14 +351,97 @@ def expand_file_refs_in_prompt(prompt, repo_root=".", max_bytes=DEFAULT_MAX_FILE
             res = list_directory(dir_path, repo_root=repo_root)
             label = f"DIRECTORY: {dir_path}"
 
-        else:
-            # Regular file reference
-            path = full_ref
+        # Handle :lines:START-END syntax
+        elif ":lines:" in full_ref:
+            parts = full_ref.split(":lines:", 1)
+            path = parts[0]
+            line_spec = parts[1] if len(parts) > 1 else ""
+
+            # Parse line range
+            line_match = re.match(r"(\d+)-(\d+)", line_spec)
+            if not line_match:
+                return f"\n\n--- FILE: {path} (ERROR: Invalid line range '{line_spec}', use :lines:START-END) ---\n"
+
+            start_line = int(line_match.group(1))
+            end_line = int(line_match.group(2))
+
+            # Read file first
+            file_res = read_file_snippet(path, repo_root=repo_root, max_bytes=max_bytes)
+            if not file_res["ok"]:
+                return f"\n\n--- FILE: {path} (ERROR: {file_res['error']}) ---\n"
+
+            # Extract lines
+            res = chunker.extract_lines(file_res["content"], start_line, end_line, path)
+            # Use actual clamped range from result, not original request
+            actual_range = res.get('lines', f"{start_line}-{end_line}")
+            label = f"FILE: {path} (lines {actual_range})"
+
+        # Handle :full mode (explicit full content)
+        elif full_ref.endswith(":full"):
+            path = full_ref[:-5]  # Remove :full
             res = read_file_snippet(path, repo_root=repo_root, max_bytes=max_bytes)
-            label = f"FILE: {path}"
+            label = f"FILE: {path} (FULL)"
+
+        # Handle :summary mode (explicit summary)
+        elif full_ref.endswith(":summary"):
+            path = full_ref[:-8]  # Remove :summary
+            file_res = read_file_snippet(path, repo_root=repo_root, max_bytes=max_bytes)
+            if not file_res["ok"]:
+                return f"\n\n--- FILE: {path} (ERROR: {file_res['error']}) ---\n"
+
+            summary = chunker.summarize(file_res["content"], path)
+            res = {"ok": True, "content": chunker.format_summary(summary)}
+            label = f"FILE: {path} (SUMMARY)"
+
+        # Handle :element_name mode (extract specific function/class/section)
+        elif ":" in full_ref and not full_ref.endswith("/"):
+            # Split on last colon to get path and element name
+            last_colon = full_ref.rfind(":")
+            path = full_ref[:last_colon]
+            element_name = full_ref[last_colon + 1:]
+
+            # Skip if element_name looks like a Windows drive letter
+            if len(element_name) == 0 or (len(path) == 1 and path.isalpha()):
+                # This is likely a Windows path like C:/...
+                path = full_ref
+                file_res = read_file_snippet(path, repo_root=repo_root, max_bytes=max_bytes)
+                if not file_res["ok"]:
+                    return f"\n\n--- FILE: {path} (ERROR: {file_res['error']}) ---\n"
+                # Auto-summarize large files
+                if chunker.should_summarize(file_res["content"]):
+                    summary = chunker.summarize(file_res["content"], path)
+                    res = {"ok": True, "content": chunker.format_summary(summary)}
+                    label = f"FILE: {path} (SUMMARY - use :full for complete content)"
+                else:
+                    res = file_res
+                    label = f"FILE: {path}"
+            else:
+                file_res = read_file_snippet(path, repo_root=repo_root, max_bytes=max_bytes)
+                if not file_res["ok"]:
+                    return f"\n\n--- FILE: {path} (ERROR: {file_res['error']}) ---\n"
+
+                res = chunker.extract_element(file_res["content"], element_name, path)
+                label = f"FILE: {path}:{element_name}"
+
+        else:
+            # Regular file reference - auto-summarize if large
+            path = full_ref
+            file_res = read_file_snippet(path, repo_root=repo_root, max_bytes=max_bytes)
+
+            if not file_res["ok"]:
+                return f"\n\n--- FILE: {path} (ERROR: {file_res['error']}) ---\n"
+
+            # Auto-summarize large files
+            if chunker.should_summarize(file_res["content"]):
+                summary = chunker.summarize(file_res["content"], path)
+                res = {"ok": True, "content": chunker.format_summary(summary)}
+                label = f"FILE: {path} (SUMMARY - use :full for complete content)"
+            else:
+                res = file_res
+                label = f"FILE: {path}"
 
         if not res["ok"]:
-            return f"\n\n--- {label} (ERROR: {res['error']}) ---\n"
+            return f"\n\n--- {label} (ERROR: {res.get('error', 'Unknown error')}) ---\n"
 
         # Wrap with explicit markers so model can clearly see boundaries
         return (
@@ -434,11 +524,88 @@ def main():
         help="Show details for session ID and exit",
     )
 
+    # Model configuration flags
+    model_group = parser.add_argument_group(
+        "model configuration", "Manage model assignments for different task types"
+    )
+    model_group.add_argument(
+        "--scan-models",
+        action="store_true",
+        help="Scan available Ollama models and update manifest",
+    )
+    model_group.add_argument(
+        "--show-models",
+        action="store_true",
+        help="Show current model assignments and exit",
+    )
+    model_group.add_argument(
+        "--set-embedding-model",
+        type=str,
+        metavar="MODEL",
+        help="Set the embedding model for semantic scoring",
+    )
+    model_group.add_argument(
+        "--set-vision-model",
+        type=str,
+        metavar="MODEL",
+        help="Set the vision model for image analysis",
+    )
+    model_group.add_argument(
+        "--set-code-model",
+        type=str,
+        metavar="MODEL",
+        help="Set the code model for code analysis",
+    )
+    model_group.add_argument(
+        "--set-reasoning-model",
+        type=str,
+        metavar="MODEL",
+        help="Set the reasoning model for complex analysis",
+    )
+    model_group.add_argument(
+        "--set-general-model",
+        type=str,
+        metavar="MODEL",
+        help="Set the general purpose model",
+    )
+
     args = parser.parse_args()
 
     # Argument validation
     if args.session_id and args.no_session:
         parser.error("--session-id and --no-session are mutually exclusive")
+
+    # Validate --set-*-model inputs
+    model_setters = {
+        '--set-embedding-model': args.set_embedding_model,
+        '--set-vision-model': args.set_vision_model,
+        '--set-code-model': args.set_code_model,
+        '--set-reasoning-model': args.set_reasoning_model,
+        '--set-general-model': args.set_general_model,
+    }
+    for flag, value in model_setters.items():
+        if value is not None:
+            # Check for empty or whitespace-only values
+            if not value.strip():
+                parser.error(f"{flag} requires a non-empty model name")
+            # Check for basic valid model name format (alphanumeric, colons, dashes, dots, underscores)
+            if not re.match(r'^[a-zA-Z0-9][a-zA-Z0-9:.\-_]*$', value):
+                parser.error(f"{flag} value '{value}' contains invalid characters. Model names should contain only alphanumeric characters, colons, dashes, dots, and underscores.")
+
+    # Check if model configuration command was requested
+    model_commands = [
+        args.scan_models,
+        args.show_models,
+        args.set_embedding_model,
+        args.set_vision_model,
+        args.set_code_model,
+        args.set_reasoning_model,
+        args.set_general_model,
+    ]
+    if any(model_commands):
+        from .model_utils import handle_model_command
+        handle_model_command(args)
+        return
 
     # Check if utility command was requested
     utility_commands = [args.list_sessions, args.purge, args.session_info]
