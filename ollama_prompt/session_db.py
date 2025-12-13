@@ -14,7 +14,7 @@ import shutil
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 from contextlib import contextmanager
 
 

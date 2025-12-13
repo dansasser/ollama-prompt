@@ -10,8 +10,8 @@ Provides automatic 3-level graduated compaction to manage context window usage:
 
 import json
 import re
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Set, Tuple
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple
 
 from ollama_prompt.session_db import SessionDatabase
 from ollama_prompt.file_chunker import FileChunker
@@ -389,7 +389,7 @@ class ContextManager:
         # Sort by score (highest first) and keep top percentage
         scored_messages.sort(key=lambda x: x[1], reverse=True)
         keep_count = max(1, int(len(scored_messages) * self.RELEVANCE_KEEP_PERCENTAGE))
-        messages_to_keep = scored_messages[:keep_count]
+        # messages_to_keep = scored_messages[:keep_count]  # Kept for reference
         messages_to_delete = scored_messages[keep_count:]
 
         # Delete low-relevance messages
@@ -543,7 +543,7 @@ class ContextManager:
 
         # Keep last 4 messages (2 exchanges)
         keep_count = min(4, len(messages))
-        messages_to_keep = messages[-keep_count:] if keep_count > 0 else []
+        # messages_to_keep = messages[-keep_count:]  # Kept implicitly
         messages_to_summarize = messages[:-keep_count] if keep_count < len(messages) else []
 
         if not messages_to_summarize:

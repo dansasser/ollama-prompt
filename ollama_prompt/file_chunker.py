@@ -14,7 +14,7 @@ Supports:
 import ast
 import re
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any
 
 
 class FileChunker:
@@ -93,7 +93,7 @@ class FileChunker:
             return {
                 'ok': False,
                 'path': path,
-                'error': f"Element extraction not supported for this file type"
+                'error': "Element extraction not supported for this file type"
             }
 
     def extract_lines(self, content: str, start: int, end: int, path: str) -> Dict[str, Any]:
@@ -351,7 +351,7 @@ class FileChunker:
     def _format_python_summary(self, summary: Dict[str, Any]) -> str:
         """Format Python summary as readable text."""
         lines = [
-            f"Language: Python",
+            "Language: Python",
             f"Size: {summary['lines']} lines, {summary['size_bytes'] / 1024:.1f} KB",
             "",
             "Structure:"
@@ -509,7 +509,7 @@ class FileChunker:
     def _format_markdown_summary(self, summary: Dict[str, Any]) -> str:
         """Format Markdown summary as readable text."""
         lines = [
-            f"Type: Markdown documentation",
+            "Type: Markdown documentation",
             f"Size: {summary['lines']} lines, {summary['size_bytes'] / 1024:.1f} KB",
             "",
             "Sections:"
