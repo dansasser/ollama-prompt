@@ -320,8 +320,9 @@ class ContextManager:
             latest_ref = refs[0]
 
             # Calculate summary tokens (estimate: ~10% of original)
+            # Floor of 50 tokens, but never exceed original to avoid increasing token count
             original_tokens = latest_ref["tokens"]
-            summary_tokens = max(50, original_tokens // 10)
+            summary_tokens = min(max(50, original_tokens // 10), original_tokens)
 
             # Update the reference mode
             self.db.update_file_reference_mode(
@@ -535,7 +536,8 @@ class ContextManager:
             if refs:
                 latest_ref = refs[0]
                 original_tokens = latest_ref["tokens"]
-                summary_tokens = max(50, original_tokens // 10)
+                # Floor of 50 tokens, but never exceed original to avoid increasing token count
+                summary_tokens = min(max(50, original_tokens // 10), original_tokens)
                 self.db.update_file_reference_mode(
                     file_ref_id=latest_ref["id"],
                     new_mode="summary",

@@ -442,10 +442,11 @@ class FileChunker:
             current_section['line_end'] = len(lines)
             sections.append(current_section)
 
-        # Extract key topics (first 200 chars of each section)
+        # Extract key topics (first ~5 lines of each section)
         topics = []
         for section in sections[:10]:
-            # Convert 1-indexed line_start to 0-indexed for array slicing
+            # Convert 1-indexed line_start (set at line 437) to 0-indexed for array slicing.
+            # This includes the header line which often contains important keywords.
             start = section['line_start'] - 1
             end = min(start + 5, section['line_end'])
             section_text = ' '.join(lines[start:end])
