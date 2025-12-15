@@ -54,6 +54,8 @@ ollama-prompt --prompt "Analyze @./src/auth.py for security issues" \
 ## Features
 
 - **Session Management** - Persistent conversations across CLI invocations
+- **Smart Context Management** - Automatic 3-level graduated compaction (file compression, message pruning, LLM summarization)
+- **Model Configuration** - Automatic model discovery and task-based assignment (embedding, vision, code, reasoning)
 - **Rich Metadata** - Full JSON output with token counts, timing, and cost tracking
 - **File References** - Reference local files with `@./path/to/file.py` syntax
 - **Directory Operations** - List, tree view, and search with `@./dir/` syntax (full read access within repo root)
@@ -167,7 +169,60 @@ ollama-prompt --prompt "Find TODO comments: @./src/:search:TODO"
 ollama-prompt --prompt "Quick question" --no-session
 ```
 
+### Model Configuration
+
+ollama-prompt can automatically detect and configure models for different task types:
+
+```bash
+# Scan available models and detect capabilities
+ollama-prompt --scan-models
+
+# Show current model assignments
+ollama-prompt --show-models
+
+# Set a specific model for a task type
+ollama-prompt --set-embedding-model nomic-embed-text
+ollama-prompt --set-vision-model qwen3-vl:latest
+ollama-prompt --set-code-model deepseek-coder:6.7b
+ollama-prompt --set-reasoning-model deepseek-r1:7b
+ollama-prompt --set-general-model llama3:8b
+```
+
+**Supported Task Types:**
+| Task | Description | Auto-Detection |
+|------|-------------|----------------|
+| `embedding` | Vector embeddings for semantic search | Models with "embed", "nomic", "mxbai" |
+| `vision` | Image/visual analysis | Models with "vl", "vision", "llava" |
+| `code` | Code generation/review | Models with "code", "coder", "starcoder" |
+| `reasoning` | Complex reasoning tasks | Models with "thinking", "r1" |
+| `general` | General chat/analysis | Any model (default) |
+
+**Manifest Location:**
+- Windows: `%APPDATA%\ollama-prompt\model-manifest.json`
+- Unix/Mac: `~/.config/ollama-prompt/model-manifest.json`
+
 **More examples:** [Use Cases Guide](docs/guides/use-cases.md) with 12 real-world scenarios
+
+### Context Management
+
+ollama-prompt includes intelligent context management with automatic 3-level graduated compaction:
+
+**Compaction Levels:**
+| Level | Threshold | Strategy | Description |
+|-------|-----------|----------|-------------|
+| 1 (Soft) | 50% | File Compression | Compress stale files from full to summary |
+| 2 (Hard) | 65% | Message Pruning | Remove low-relevance messages using vector/keyword scoring |
+| 3 (Emergency) | 80% | LLM Summarization | Summarize old history, keep recent exchanges |
+
+**How It Works:**
+1. As conversations grow, context usage is monitored
+2. When thresholds are crossed, appropriate compaction level triggers
+3. Stale file references are compressed first (least disruptive)
+4. Low-relevance messages are pruned based on semantic similarity
+5. Emergency summarization preserves key information while freeing space
+
+**Vector-Based Relevance Scoring:**
+When an embedding model is configured (via `--set-embedding-model`), messages are scored using semantic similarity to recent context. Falls back to keyword matching if no embedding model is available.
 
 ---
 
