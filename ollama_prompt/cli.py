@@ -644,8 +644,21 @@ def main():
     session_manager = None
     if not args.no_session:
         from .session_manager import SessionManager
+        from .model_manifest import ModelManifest
 
-        session_manager = SessionManager()
+        # Load model manifest for embedding model selection
+        manifest = ModelManifest()
+        if manifest.exists():
+            manifest.load()
+        else:
+            # No manifest yet - user hasn't run --scan-models
+            manifest = None
+
+        session_manager = SessionManager(
+            use_smart_compaction=True,
+            manifest=manifest,
+            fallback_model=args.model  # Use chat model as embedding fallback
+        )
 
         try:
             # Get or create session
