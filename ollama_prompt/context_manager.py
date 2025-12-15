@@ -567,7 +567,8 @@ class ContextManager:
         self.db.delete_messages(delete_ids)
 
         # Add summary as a system message
-        summary_tokens = len(summary_text) // 4  # Rough estimate
+        # Use floor of 50 tokens minimum to prevent underestimation
+        summary_tokens = max(50, len(summary_text) // 4)
         self.db.save_message(
             session_id=self.session_id,
             role="system",

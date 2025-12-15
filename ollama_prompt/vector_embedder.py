@@ -98,17 +98,19 @@ class VectorEmbedder:
             ollama_host=ollama_host
         )
 
-    def _get_cache_key(self, text: str) -> str:
+    def _get_cache_key(self, text: str, model: Optional[str] = None) -> str:
         """
         Generate cache key for text content.
 
         Args:
             text: Text to hash
+            model: Model name to include in key (defaults to self.model)
 
         Returns:
             str: MD5 hash of text + model name
         """
-        content = f"{self.model}:{text}"
+        model_name = model if model else self.model
+        content = f"{model_name}:{text}"
         return hashlib.md5(content.encode('utf-8')).hexdigest()
 
     def is_available(self) -> bool:
@@ -201,22 +203,29 @@ class VectorEmbedder:
         if not text or not text.strip():
             return None
 
-        # Check cache first
+        # Check cache first (try both primary and fallback model keys)
         if use_cache:
-            cache_key = self._get_cache_key(text)
+            cache_key = self._get_cache_key(text, self.model)
             if cache_key in self.cache:
                 return self.cache[cache_key]
+            # Also check fallback model cache key
+            if self.fallback_model:
+                fallback_key = self._get_cache_key(text, self.fallback_model)
+                if fallback_key in self.cache:
+                    return self.cache[fallback_key]
 
         # Try primary model first
         embedding = self._try_embed(text, self.model)
+        actual_model = self.model
 
         # If primary failed and we have a fallback, try it
         if embedding is None and self.fallback_model:
             embedding = self._try_embed(text, self.fallback_model)
+            actual_model = self.fallback_model
 
-        # Cache successful embedding
+        # Cache successful embedding with the actual model used
         if embedding and use_cache:
-            cache_key = self._get_cache_key(text)
+            cache_key = self._get_cache_key(text, actual_model)
             self.cache[cache_key] = embedding
 
         return embedding

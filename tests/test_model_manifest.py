@@ -20,7 +20,8 @@ class TestManifestInit:
             monkeypatch.setenv("APPDATA", str(tmp_path))
         else:
             # Unix: uses ~/.config/
-            monkeypatch.setattr(Path, "home", lambda: tmp_path)
+            # Path.home() is a classmethod, so lambda must accept cls parameter
+            monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
 
         manifest = ModelManifest()
         assert "ollama-prompt" in str(manifest.path)
@@ -111,8 +112,9 @@ class TestTaskAssignments:
 
         assert manifest.get_model_for_task("embedding") == "nomic-embed-text"
 
-        # Verify persisted
+        # Verify persisted - must call load() to read from disk
         manifest2 = ModelManifest(path=path)
+        manifest2.load()
         assert manifest2.get_model_for_task("embedding") == "nomic-embed-text"
 
     def test_set_model_invalid_task(self, tmp_path):

@@ -575,7 +575,7 @@ def main():
     if args.session_id and args.no_session:
         parser.error("--session-id and --no-session are mutually exclusive")
 
-    # Validate --set-*-model inputs
+    # Validate --set-*-model inputs using the same validation as other model names
     model_setters = {
         '--set-embedding-model': args.set_embedding_model,
         '--set-vision-model': args.set_vision_model,
@@ -585,12 +585,10 @@ def main():
     }
     for flag, value in model_setters.items():
         if value is not None:
-            # Check for empty or whitespace-only values
-            if not value.strip():
-                parser.error(f"{flag} requires a non-empty model name")
-            # Check for basic valid model name format (alphanumeric, colons, dashes, dots, underscores)
-            if not re.match(r'^[a-zA-Z0-9][a-zA-Z0-9:.\-_]*$', value):
-                parser.error(f"{flag} value '{value}' contains invalid characters. Model names should contain only alphanumeric characters, colons, dashes, dots, and underscores.")
+            try:
+                validate_model_name(value)
+            except ValueError as e:
+                parser.error(f"{flag}: {e}")
 
     # Check if model configuration command was requested
     model_commands = [

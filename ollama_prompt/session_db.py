@@ -388,6 +388,8 @@ class SessionDatabase:
                             content = msg.get('content', '')
                             tokens = len(content) // 4
 
+                            # Preserve original timestamp if available, fallback to now
+                            msg_timestamp = msg.get('timestamp', datetime.now().isoformat())
                             cursor.execute("""
                                 INSERT INTO messages
                                 (session_id, role, content, tokens, timestamp, is_summary)
@@ -397,7 +399,7 @@ class SessionDatabase:
                                 msg['role'],
                                 content,
                                 tokens,
-                                datetime.now().isoformat(),
+                                msg_timestamp,
                                 False
                             ))
             except (json.JSONDecodeError, TypeError, KeyError):
@@ -904,25 +906,38 @@ class SessionDatabase:
                 return []
 
             # Get all unique files with their last reference
-            # Use id for comparison (stable ordering even with same-second timestamps)
-            query = """
+            # Use subquery to find max message_id per file, then join to get full row data
+            # This ensures deterministic results (non-aggregated columns come from matched row)
+            base_query = """
                 SELECT fr.file_path, fr.mode, fr.tokens, fr.message_id,
                        (SELECT COUNT(*) FROM messages m2
                         WHERE m2.session_id = ? AND m2.id > m.id) as messages_ago
                 FROM file_references fr
                 JOIN messages m ON fr.message_id = m.id
-                WHERE m.session_id = ?
+                JOIN (
+                    SELECT file_path, MAX(message_id) as max_msg_id
+                    FROM file_references fr2
+                    JOIN messages m2 ON fr2.message_id = m2.id
+                    WHERE m2.session_id = ?
             """
             params: List[Any] = [session_id, session_id]
 
             if mode_filter:
-                query += " AND fr.mode = ?"
+                base_query += " AND fr2.mode = ?"
                 params.append(mode_filter)
 
-            query += """
-                GROUP BY fr.file_path
-                HAVING fr.message_id = MAX(fr.message_id)
+            base_query += """
+                    GROUP BY file_path
+                ) latest ON fr.file_path = latest.file_path AND fr.message_id = latest.max_msg_id
+                WHERE m.session_id = ?
             """
+            params.append(session_id)
+
+            if mode_filter:
+                base_query += " AND fr.mode = ?"
+                params.append(mode_filter)
+
+            query = base_query
 
             cursor.execute(query, params)
             all_files = [dict(row) for row in cursor.fetchall()]

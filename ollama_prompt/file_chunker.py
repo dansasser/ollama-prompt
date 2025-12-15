@@ -445,7 +445,8 @@ class FileChunker:
         # Extract key topics (first 200 chars of each section)
         topics = []
         for section in sections[:10]:
-            start = section['line_start']
+            # Convert 1-indexed line_start to 0-indexed for array slicing
+            start = section['line_start'] - 1
             end = min(start + 5, section['line_end'])
             section_text = ' '.join(lines[start:end])
             # Extract keywords

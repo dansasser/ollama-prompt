@@ -401,8 +401,12 @@ def bar():
 
         assert "target_func" in result
         assert "return x * 2" in result
-        # Should not include other functions
-        assert "def foo" not in result or "module.py:target_func" in result
+        # Should not include other functions (check actual file content, not the path)
+        # Split off the file reference path to check only the extracted content
+        content_start = result.find("```") if "```" in result else 0
+        extracted_content = result[content_start:] if content_start > 0 else result
+        assert "def foo" not in extracted_content, "foo() should not be included when extracting target_func"
+        assert "def bar" not in extracted_content, "bar() should not be included when extracting target_func"
 
     def test_file_ref_with_line_range(self, tmp_path):
         """Test :lines:START-END extracts line range."""

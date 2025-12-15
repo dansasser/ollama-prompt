@@ -25,10 +25,10 @@ _auto_compact()
     ↓
 Calculate usage = current_tokens / max_tokens
     ↓
-    ├─ usage < 60% ──→ Level 0: Do nothing
+    ├─ usage < 50% ──→ Level 0: Do nothing
     │                   └─ Return
     │
-    ├─ usage 60-75% ──→ Level 1: Soft Compaction
+    ├─ usage 50-65% ──→ Level 1: Soft Compaction
     │                   └─ _soft_compact()
     │                       ↓
     │                   DECISION: Which files to compress?
@@ -39,7 +39,7 @@ Calculate usage = current_tokens / max_tokens
     │                       ↓
     │                   Return tokens_freed
     │
-    ├─ usage 75-90% ──→ Level 2: Hard Compaction
+    ├─ usage 65-80% ──→ Level 2: Hard Compaction
     │                   └─ _hard_compact()
     │                       ↓
     │                   DECISION: Which messages to keep?
@@ -60,7 +60,7 @@ Calculate usage = current_tokens / max_tokens
     │                       ↓
     │                   Return tokens_freed
     │
-    └─ usage > 90% ────→ Level 3: Emergency Compaction
+    └─ usage > 80% ────→ Level 3: Emergency Compaction
                         └─ _emergency_compact()
                             ↓
                         STEP 1: Compress ALL files to summaries
@@ -288,7 +288,7 @@ Message 23: 70% → Compact → 60%  ← GOOD
 | Question | Answer | How |
 |----------|--------|-----|
 | **When to compact?** | Automatically after each message | Check usage % against thresholds |
-| **Which level to use?** | Based on usage % | 60-75% = L1, 75-90% = L2, >90% = L3 |
+| **Which level to use?** | Based on usage % | 50-65% = L1, 65-80% = L2, >80% = L3 |
 | **What to compress?** | Depends on level | L1: rules, L2: vectors, L3: LLM |
 | **How much to remove?** | Depends on level | L1: stale files, L2: 50%, L3: aggressive |
 | **When to stop?** | When usage drops below threshold | Automatic |

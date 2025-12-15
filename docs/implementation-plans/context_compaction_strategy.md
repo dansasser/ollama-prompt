@@ -241,7 +241,7 @@ def _generate_summary(self, prompt: str) -> str:
         prompt=prompt,
         options={
             'temperature': 0.3,  # Low temperature for factual summary
-            'max_tokens': 500    # Limit summary length
+            'num_predict': 500   # Limit summary length (Ollama uses num_predict, not max_tokens)
         }
     )
     
@@ -340,7 +340,7 @@ def emergency_compact(self) -> int:
     # Step 3: Add emergency notice
     emergency_notice = {
         'role': 'system',
-        'content': "[NOTICE: Context window reached 90% capacity. Older messages and file content have been compressed. Use :full to re-fetch complete file content if needed.]",
+        'content': "[NOTICE: Context window reached 80% capacity. Older messages and file content have been compressed. Use :full to re-fetch complete file content if needed.]",
         'timestamp': self._current_timestamp(),
         'is_notice': True
     }
