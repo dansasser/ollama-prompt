@@ -130,15 +130,24 @@ class VectorEmbedder:
                 text=True,
                 timeout=10
             )
-            available_models = result.stdout
 
-            # Check primary model
-            if self.model and self.model in available_models:
+            # Parse model names from ollama list output
+            # Format: NAME ID SIZE MODIFIED (first line is header)
+            model_names = set()
+            for line in result.stdout.strip().split('\n')[1:]:  # Skip header
+                if line.strip():
+                    # First column is the model name
+                    parts = line.split()
+                    if parts:
+                        model_names.add(parts[0])
+
+            # Check primary model (exact match)
+            if self.model and self.model in model_names:
                 self._model_available = True
                 return True
 
-            # Check fallback model
-            if self.fallback_model and self.fallback_model in available_models:
+            # Check fallback model (exact match)
+            if self.fallback_model and self.fallback_model in model_names:
                 self._fallback_available = True
                 self._model_available = True  # We have at least one option
                 return True

@@ -400,10 +400,10 @@ def expand_file_refs_in_prompt(prompt, repo_root=".", max_bytes=DEFAULT_MAX_FILE
             path = full_ref[:last_colon]
             element_name = full_ref[last_colon + 1:]
 
-            # Skip if element_name looks like a Windows drive letter
-            if len(element_name) == 0 or (len(path) == 1 and path.isalpha()):
-                # This is likely a Windows path like C:/...
-                path = full_ref
+            # Case 1: Trailing colon with empty element_name (e.g., @./file.py:)
+            # Strip the trailing colon and read as normal file
+            if element_name == "":
+                path = full_ref[:-1]  # Strip trailing colon
                 file_res = read_file_snippet(path, repo_root=repo_root, max_bytes=max_bytes)
                 if not file_res["ok"]:
                     return f"\n\n--- FILE: {path} (ERROR: {file_res['error']}) ---\n"
@@ -415,6 +415,24 @@ def expand_file_refs_in_prompt(prompt, repo_root=".", max_bytes=DEFAULT_MAX_FILE
                 else:
                     res = file_res
                     label = f"FILE: {path}"
+
+            # Case 2: Windows drive letter (e.g., C:/foo/bar)
+            # path is single letter and element_name is non-empty (the rest of the path)
+            elif len(path) == 1 and path.isalpha():
+                path = full_ref  # Use full path including drive letter
+                file_res = read_file_snippet(path, repo_root=repo_root, max_bytes=max_bytes)
+                if not file_res["ok"]:
+                    return f"\n\n--- FILE: {path} (ERROR: {file_res['error']}) ---\n"
+                # Auto-summarize large files
+                if chunker.should_summarize(file_res["content"]):
+                    summary = chunker.summarize(file_res["content"], path)
+                    res = {"ok": True, "content": chunker.format_summary(summary)}
+                    label = f"FILE: {path} (SUMMARY - use :full for complete content)"
+                else:
+                    res = file_res
+                    label = f"FILE: {path}"
+
+            # Case 3: Normal element extraction (e.g., @./file.py:function_name)
             else:
                 file_res = read_file_snippet(path, repo_root=repo_root, max_bytes=max_bytes)
                 if not file_res["ok"]:

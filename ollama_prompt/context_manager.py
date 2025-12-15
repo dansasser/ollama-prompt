@@ -294,7 +294,8 @@ class ContextManager:
         Returns:
             int: Tokens freed (based on metadata update)
         """
-        tokens_before = self.db.get_message_tokens(self.session_id)
+        # Use file_reference tokens since soft compaction only updates file_references
+        tokens_before = self.db.get_file_reference_tokens(self.session_id)
 
         # Find stale files that are still in 'full' mode
         stale_files = self.db.get_stale_files(
@@ -334,9 +335,9 @@ class ContextManager:
             tokens_saved += (original_tokens - summary_tokens)
             compressed_count += 1
 
-        tokens_after = self.db.get_message_tokens(self.session_id)
-
         if compressed_count > 0:
+            # Query actual file_reference tokens after updates for accurate metrics
+            tokens_after = self.db.get_file_reference_tokens(self.session_id)
             self._record_compaction(
                 level=1,
                 tokens_before=tokens_before,
@@ -361,10 +362,11 @@ class ContextManager:
         Returns:
             int: Tokens freed
         """
-        tokens_before = self.db.get_message_tokens(self.session_id)
-
         # First, try soft compaction
         self._soft_compact()
+
+        # Capture message tokens AFTER soft compaction to avoid double-counting
+        tokens_before = self.db.get_message_tokens(self.session_id)
 
         # Load all messages
         messages = self.db.load_messages(self.session_id)

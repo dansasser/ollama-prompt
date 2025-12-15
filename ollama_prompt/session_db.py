@@ -724,6 +724,26 @@ class SessionDatabase:
             """, (session_id,))
             return cursor.fetchone()["total"]
 
+    def get_file_reference_tokens(self, session_id: str) -> int:
+        """
+        Get total token count for a session's file references.
+
+        Args:
+            session_id: Session identifier
+
+        Returns:
+            int: Total tokens from file references
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT COALESCE(SUM(fr.tokens), 0) as total
+                FROM file_references fr
+                JOIN messages m ON fr.message_id = m.id
+                WHERE m.session_id = ?
+            """, (session_id,))
+            return cursor.fetchone()["total"]
+
     def delete_messages(self, message_ids: List[int]) -> int:
         """
         Delete specific messages by ID.
