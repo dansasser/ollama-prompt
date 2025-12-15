@@ -294,7 +294,10 @@ class TestHardCompaction:
 
     def test_calculate_relevance_keyword_overlap(self, db):
         """Test relevance scoring based on keyword overlap."""
-        manager = ContextManager(db, "test-session", max_tokens=10000)
+        # Disable vector scoring to test keyword-based relevance
+        manager = ContextManager(
+            db, "test-session", max_tokens=10000, use_vector_scoring=False
+        )
 
         # High overlap
         msg_high = {"content": "python code function variable", "role": "user"}
@@ -309,7 +312,10 @@ class TestHardCompaction:
 
     def test_relevance_boost_for_code(self, db):
         """Test relevance boost for code blocks."""
-        manager = ContextManager(db, "test-session", max_tokens=10000)
+        # Disable vector scoring to test keyword-based boosts
+        manager = ContextManager(
+            db, "test-session", max_tokens=10000, use_vector_scoring=False
+        )
 
         msg_with_code = {"content": "```python\ndef foo(): pass\n```", "role": "assistant"}
         msg_without_code = {"content": "def foo pass", "role": "assistant"}

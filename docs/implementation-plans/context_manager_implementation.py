@@ -439,7 +439,7 @@ SUMMARY:"""
         
         try:
             response = ollama.generate(
-                model='llama3.2:3b',  # Use smaller model for speed
+                model=self.model_name,
                 prompt=prompt,
                 options={'temperature': 0.3, 'max_tokens': 500}
             )
@@ -510,19 +510,24 @@ SUMMARY:"""
 class LightweightVectorScorer:
     """
     Simple vector-based relevance scoring without a full vector database.
-    
+
     Uses Ollama's embedding model for semantic similarity.
     """
-    
+
+    # Default embedding dimension (nomic-embed-text)
+    # Updated dynamically after first successful embedding
+    DEFAULT_EMBEDDING_DIM = 768
+
     def __init__(self, embedding_model: str = "nomic-embed-text"):
         """
         Initialize vector scorer.
-        
+
         Args:
             embedding_model: Ollama embedding model to use
         """
         self.embedding_model = embedding_model
         self.cache = {}  # Cache embeddings to avoid recomputation
+        self._detected_dim: Optional[int] = None  # Detected dimension from model
     
     def embed(self, text: str) -> np.ndarray:
         """
@@ -546,16 +551,21 @@ class LightweightVectorScorer:
                 prompt=text[:1000]  # Limit to 1000 chars for speed
             )
             embedding = np.array(response["embedding"], dtype=np.float32)
-            
+
+            # Store detected dimension for fallback
+            if self._detected_dim is None:
+                self._detected_dim = len(embedding)
+
             # Cache it
             self.cache[cache_key] = embedding
-            
+
             return embedding
-        
+
         except Exception as e:
             print(f"[Vector Scorer] Embedding failed: {e}")
-            # Return zero vector as fallback
-            return np.zeros(768, dtype=np.float32)  # nomic-embed-text dimension
+            # Return zero vector as fallback using detected or default dimension
+            dim = self._detected_dim or self.DEFAULT_EMBEDDING_DIM
+            return np.zeros(dim, dtype=np.float32)
     
     def score_relevance(self, text: str, reference_embedding: np.ndarray) -> float:
         """

@@ -285,10 +285,14 @@ class ContextManager:
         Level 1: Compress stale files from full to summary.
 
         Finds files in 'full' mode not referenced in recent messages
-        and replaces their content with summaries.
+        and updates their metadata to reflect summary mode.
+
+        Note: This updates file_references metadata but does not modify
+        actual message content. Token tracking is handled via the
+        file_references table token updates.
 
         Returns:
-            int: Tokens freed
+            int: Tokens freed (based on metadata update)
         """
         tokens_before = self.db.get_message_tokens(self.session_id)
 
