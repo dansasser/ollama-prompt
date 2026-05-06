@@ -6,10 +6,14 @@ import re
 import sys
 
 import ollama
+
 # Import secure file reading (TOCTOU-safe, symlink-blocking)
 # Now using llm-filesystem-tools package for production-ready security
-from llm_fs_tools import (DEFAULT_MAX_FILE_BYTES, create_directory_tools,
-                          read_file_secure)
+from llm_fs_tools import (
+    DEFAULT_MAX_FILE_BYTES,
+    create_directory_tools,
+    read_file_secure,
+)
 
 # Maximum prompt size to prevent ReDoS and resource exhaustion
 MAX_PROMPT_SIZE = 10_000_000  # 10MB
@@ -376,6 +380,10 @@ def main():
         "--model", default="deepseek-v3.1:671b-cloud", help="Model name"
     )
     parser.add_argument(
+        "--host",
+        help="Ollama API host URL (e.g., http://127.0.0.1:11434). Defaults to OLLAMA_HOST env var or localhost.",
+    )
+    parser.add_argument(
         "--temperature", type=float, default=0.1, help="Sampling temperature"
     )
     parser.add_argument(
@@ -511,7 +519,13 @@ def main():
     if args.think:
         options["think"] = True
 
-    result = ollama.generate(
+    client_kwargs = {}
+    if args.host:
+        client_kwargs["host"] = args.host
+
+    client = ollama.Client(**client_kwargs)
+
+    result = client.generate(
         model=args.model, prompt=prompt_with_context, options=options, stream=False
     )
 
