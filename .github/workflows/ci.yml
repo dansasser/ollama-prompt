@@ -63,4 +63,5 @@ jobs:
           pip install ruff
 
       - name: Run ruff
-        run: ruff check ollama_prompt/
+        # Keep CI's existing rule selection as Ruff's defaults evolve.
+        run: ruff check --select E4,E7,E9,F ollama_prompt/

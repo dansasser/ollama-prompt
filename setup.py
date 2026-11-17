@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='ollama-prompt',
-    version='1.2.0',
+    version='1.2.1',
     packages=find_packages(),
     py_modules=['ollama_prompt'],
     install_requires=['ollama', 'llm-fs-tools>=0.1.0'],

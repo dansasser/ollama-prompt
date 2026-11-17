@@ -52,6 +52,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.1] - 2026-11-17
+
+### Fixed
+
+- Updated the Code of Conduct reporting address to `contact@gorombo.com`.
+
 ## [1.2.0] - 2025-10-31
 
 ### Added
